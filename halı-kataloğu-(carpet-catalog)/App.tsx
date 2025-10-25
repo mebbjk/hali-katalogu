@@ -177,7 +177,8 @@ const BottomNavBar: React.FC<{
                       return React.createElement('div', { key: item.name, className: '-mt-6' },
                           React.createElement(motion.button, {
                               onClick: item.action,
-                              onLongPress: () => setFabMenuOpen(p => !p),
+// Fix: `onLongPress` is not a valid prop. Replaced with `onContextMenu` to simulate long-press behavior.
+                              onContextMenu: (e: React.MouseEvent) => { e.preventDefault(); setFabMenuOpen(p => !p); },
                               onTap: () => { if (isFabMenuOpen) setFabMenuOpen(false); else item.action(); },
                               className: "w-16 h-16 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-lg hover:bg-blue-700 transition-transform active:scale-95",
                               whileTap: { scale: 0.95 },
@@ -229,7 +230,8 @@ const CarpetGrid: React.FC<{ carpets: Carpet[], onView: (carpet: Carpet) => void
           exit: { opacity: 0, scale: 0.8 },
           transition: { duration: 0.3 },
           className: "bg-white dark:bg-slate-800 rounded-xl shadow-md overflow-hidden cursor-pointer transform hover:scale-105 transition-transform duration-300 group",
-          onClick: () => onView(carpet)
+// Fix: `onClick` is not a recognized prop on `motion.div`. Replaced with `onTap` for framer-motion gesture handling.
+          onTap: () => onView(carpet)
         },
           React.createElement('div', { className: "relative" },
             React.createElement('img', { className: "w-full h-48 object-cover", src: carpet.imageUrl, alt: carpet.name }),
@@ -451,9 +453,13 @@ const AddCarpetModal: React.FC<{
       )
   );
 
-  return React.createElement(ModalWrapper, { onClose, title: t('addCarpet'), className: "max-w-xl" },
-    isScanning ? renderScanner() : renderForm()
-  );
+  return React.createElement(ModalWrapper, {
+    onClose,
+    title: t('addCarpet'),
+    className: "max-w-xl",
+// Fix: The type checker expects `children` to be in the props object. Moving it here from a separate argument.
+    children: isScanning ? renderScanner() : renderForm()
+  });
 };
 
 const FindMatchModal: React.FC<{
@@ -486,8 +492,11 @@ const FindMatchModal: React.FC<{
     }
   };
 
-  return React.createElement(ModalWrapper, { onClose, title: t('findMatchingCarpet') },
-    React.createElement('div', { className: "p-6" },
+  return React.createElement(ModalWrapper, {
+    onClose,
+    title: t('findMatchingCarpet'),
+// Fix: The type checker expects `children` to be in the props object. Moving it here from a separate argument.
+    children: React.createElement('div', { className: "p-6" },
       !preview && React.createElement('div', { className: "text-center" },
         React.createElement('p', { className: "mb-4" }, t('uploadCarpetToMatch')),
         React.createElement('button', { onClick: () => fileInputRef.current?.click(), className: "px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 font-semibold flex items-center gap-2 mx-auto" },
@@ -513,7 +522,7 @@ const FindMatchModal: React.FC<{
         )
       )
     )
-  );
+  });
 };
 
 const CarpetDetailModal: React.FC<{ carpet: Carpet, onClose: () => void, onDelete: (carpet: Carpet) => void, onUpdate: (carpet: Carpet) => void }> = ({ carpet, onClose, onDelete, onUpdate }) => {
@@ -535,8 +544,12 @@ const CarpetDetailModal: React.FC<{ carpet: Carpet, onClose: () => void, onDelet
 
   const fields: (keyof Carpet)[] = ['name', 'brand', 'model', 'price', 'size', 'pattern', 'texture', 'yarnType', 'type', 'description', 'barcodeId'];
 
-  return React.createElement(ModalWrapper, { onClose, title: isEditing ? t('editCarpet') : t('carpetDetails'), className: "max-w-2xl" },
-    React.createElement('div', null,
+  return React.createElement(ModalWrapper, {
+    onClose,
+    title: isEditing ? t('editCarpet') : t('carpetDetails'),
+    className: "max-w-2xl",
+// Fix: The type checker expects `children` to be in the props object. Moving it here from a separate argument.
+    children: React.createElement('div', null,
       React.createElement('img', { className: "w-full h-64 object-cover", src: carpet.imageUrl, alt: carpet.name }),
       React.createElement('div', { className: "p-6 max-h-[50vh] overflow-y-auto" },
         isEditing ? React.createElement('div', { className: "grid grid-cols-1 sm:grid-cols-2 gap-4" },
@@ -579,21 +592,26 @@ const CarpetDetailModal: React.FC<{ carpet: Carpet, onClose: () => void, onDelet
         )
       )
     )
-  );
+  });
 };
 
 const ConfirmDeleteModal: React.FC<{ carpet: Carpet, onClose: () => void, onConfirmDelete: () => void }> = ({ carpet, onClose, onConfirmDelete }) => {
   const { t } = useSettings();
-  return React.createElement(ModalWrapper, { onClose, title: t('confirmDeleteTitle') },
-    React.createElement('div', { className: "p-6" },
-      React.createElement('p', null, t('confirmDeleteMessage')),
-      React.createElement('div', { className: "font-semibold my-4 p-2 bg-slate-100 dark:bg-slate-700 rounded text-center" }, carpet.name)
-    ),
-    React.createElement('div', { className: "p-4 bg-slate-50 dark:bg-slate-900/50 flex justify-end gap-3" },
-      React.createElement('button', { onClick: onClose, className: "px-4 py-2 rounded-lg bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 font-semibold" }, t('cancel')),
-      React.createElement('button', { onClick: onConfirmDelete, className: "px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 font-semibold" }, t('delete'))
-    )
-  );
+  return React.createElement(ModalWrapper, {
+    onClose,
+    title: t('confirmDeleteTitle'),
+// Fix: The type checker expects `children` to be in the props object. Moving it here from a separate argument.
+    children: [
+      React.createElement('div', { className: "p-6", key: 'content' },
+        React.createElement('p', null, t('confirmDeleteMessage')),
+        React.createElement('div', { className: "font-semibold my-4 p-2 bg-slate-100 dark:bg-slate-700 rounded text-center" }, carpet.name)
+      ),
+      React.createElement('div', { className: "p-4 bg-slate-50 dark:bg-slate-900/50 flex justify-end gap-3", key: 'actions' },
+        React.createElement('button', { onClick: onClose, className: "px-4 py-2 rounded-lg bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 font-semibold" }, t('cancel')),
+        React.createElement('button', { onClick: onConfirmDelete, className: "px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 font-semibold" }, t('delete'))
+      )
+    ]
+  });
 }
 
 const SettingsModal: React.FC<{ onClose: () => void, carpets: Carpet[], replaceAllCarpets: (carpets: Carpet[]) => void }> = ({ onClose, carpets, replaceAllCarpets }) => {
@@ -637,41 +655,48 @@ const SettingsModal: React.FC<{ onClose: () => void, carpets: Carpet[], replaceA
     reader.readAsText(file);
   };
 
-  return React.createElement(ModalWrapper, { onClose, title: t('settings') },
-    React.createElement('div', { className: "p-6 divide-y divide-slate-200 dark:divide-slate-700" },
-      React.createElement('div', { className: "pb-4" },
-        React.createElement('label', { className: "block font-semibold mb-2" }, t('language')),
-        React.createElement('select', { value: language, onChange: e => setLanguage(e.target.value as any), className: "w-full p-2 rounded-lg bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 focus:ring-2 focus:ring-blue-500 focus:outline-none" },
-          React.createElement('option', { value: "en" }, "English"),
-          React.createElement('option', { value: "tr" }, "Türkçe")
+  return React.createElement(ModalWrapper, {
+    onClose,
+    title: t('settings'),
+// Fix: The type checker expects `children` to be in the props object. Moving it here from a separate argument.
+    children: [
+      React.createElement('div', { className: "p-6 divide-y divide-slate-200 dark:divide-slate-700", key: 'content' },
+        React.createElement('div', { className: "pb-4" },
+          React.createElement('label', { className: "block font-semibold mb-2" }, t('language')),
+          React.createElement('select', { value: language, onChange: e => setLanguage(e.target.value as any), className: "w-full p-2 rounded-lg bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 focus:ring-2 focus:ring-blue-500 focus:outline-none" },
+// Fix: The type checker was failing on the `value` prop. Moving the text content to a `children` prop resolves the issue.
+            React.createElement('option', { value: "en", children: "English" }),
+            React.createElement('option', { value: "tr", children: "Türkçe" })
+          )
+        ),
+        React.createElement('div', { className: "py-4" },
+          React.createElement('label', { className: "block font-semibold mb-2" }, t('theme')),
+          React.createElement('select', { value: theme, onChange: e => setTheme(e.target.value as any), className: "w-full p-2 rounded-lg bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 focus:ring-2 focus:ring-blue-500 focus:outline-none" },
+// Fix: The type checker was failing on the `value` prop. Moving the text content to a `children` prop resolves the issue.
+            React.createElement('option', { value: "light", children: t('light') }),
+            React.createElement('option', { value: "dark", children: t('dark') })
+          )
+        ),
+        React.createElement('div', { className: "pt-4" },
+          React.createElement('h3', { className: "font-semibold mb-2" }, t('dataManagement')),
+          React.createElement('div', { className: "flex gap-4" },
+              React.createElement('button', { onClick: handleExport, className: "flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-semibold bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500" },
+                  React.createElement(Icons.ArrowDownTrayIcon, { className: "w-5 h-5"}),
+                  t('exportData')
+              ),
+              React.createElement('button', { onClick: handleImportClick, className: "flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-semibold bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500" },
+                  React.createElement(Icons.ArrowUpTrayIcon, { className: "w-5 h-5"}),
+                  t('importData')
+              ),
+              React.createElement('input', { type: 'file', accept: '.json', ref: importInputRef, onChange: handleFileImport, className: "hidden" })
+          )
         )
       ),
-      React.createElement('div', { className: "py-4" },
-        React.createElement('label', { className: "block font-semibold mb-2" }, t('theme')),
-        React.createElement('select', { value: theme, onChange: e => setTheme(e.target.value as any), className: "w-full p-2 rounded-lg bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 focus:ring-2 focus:ring-blue-500 focus:outline-none" },
-          React.createElement('option', { value: "light" }, t('light')),
-          React.createElement('option', { value: "dark" }, t('dark'))
-        )
-      ),
-      React.createElement('div', { className: "pt-4" },
-        React.createElement('h3', { className: "font-semibold mb-2" }, t('dataManagement')),
-        React.createElement('div', { className: "flex gap-4" },
-            React.createElement('button', { onClick: handleExport, className: "flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-semibold bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500" },
-                React.createElement(Icons.ArrowDownTrayIcon, { className: "w-5 h-5"}),
-                t('exportData')
-            ),
-            React.createElement('button', { onClick: handleImportClick, className: "flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-semibold bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500" },
-                React.createElement(Icons.ArrowUpTrayIcon, { className: "w-5 h-5"}),
-                t('importData')
-            ),
-            React.createElement('input', { type: 'file', accept: '.json', ref: importInputRef, onChange: handleFileImport, className: "hidden" })
-        )
+      React.createElement('div', { className: "p-4 bg-slate-50 dark:bg-slate-900/50 flex justify-end", key: 'actions' },
+        React.createElement('button', { onClick: onClose, className: "px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700" }, t('close'))
       )
-    ),
-    React.createElement('div', { className: "p-4 bg-slate-50 dark:bg-slate-900/50 flex justify-end" },
-      React.createElement('button', { onClick: onClose, className: "px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700" }, t('close'))
-    )
-  );
+    ]
+  });
 };
 
 const BarcodeScanModal: React.FC<{ onClose: () => void, onCarpetFound: (id: string) => void, carpets: Carpet[] }> = ({ onClose, onCarpetFound, carpets }) => {
@@ -738,15 +763,18 @@ const BarcodeScanModal: React.FC<{ onClose: () => void, onCarpetFound: (id: stri
         };
     }, [carpets, onCarpetFound, t]);
 
-    return React.createElement(ModalWrapper, { onClose, title: t('scanBarcode') },
-        React.createElement('div', { className: "p-4 relative" },
+    return React.createElement(ModalWrapper, {
+      onClose,
+      title: t('scanBarcode'),
+// Fix: The type checker expects `children` to be in the props object. Moving it here from a separate argument.
+      children: React.createElement('div', { className: "p-4 relative" },
             React.createElement('video', { ref: videoRef, className: "w-full rounded-lg bg-black" }),
             React.createElement('div', { className: "absolute inset-0 flex items-center justify-center p-4"},
                  React.createElement('div', { className: 'w-full h-1/3 border-4 border-dashed border-white/50 rounded-lg' })
             ),
             React.createElement('p', { className: "text-center mt-4 font-semibold" }, status)
         )
-    );
+    });
 };
 
 export default App;
