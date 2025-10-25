@@ -29,7 +29,7 @@ const App = () => {
 
 
   const navigate = (newScreen: AppScreen, carpetId?: string) => {
-    if (newScreen === AppScreen.DETAIL) {
+    if (newScreen !== screen) {
       setPreviousScreen(screen);
     }
     setScreen(newScreen);
@@ -39,7 +39,9 @@ const App = () => {
   };
 
   const handleBackNavigation = () => {
-    navigate(previousScreen);
+    setScreen(previousScreen);
+    setError(null);
+    setSearchResult(null);
   };
 
   const handleImageUploadForAdd = async (file: File) => {
@@ -101,7 +103,7 @@ const App = () => {
   const handleDelete = () => {
     if(carpetToDelete){
         deleteCarpet(carpetToDelete);
-        navigate(previousScreen); // Go back after deleting
+        setScreen(previousScreen); // Go back after deleting
     }
     setShowDeleteModal(false);
     setCarpetToDelete(null);
@@ -137,7 +139,7 @@ const App = () => {
   return (
     <div className="flex flex-col h-screen max-w-md mx-auto bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans shadow-2xl">
       <header className="sticky top-0 bg-slate-100/80 dark:bg-slate-950/80 backdrop-blur-sm shadow-sm p-4 flex items-center justify-between z-10">
-         {screen !== AppScreen.LIST && screen !== AppScreen.ADD ? (
+         {screen !== AppScreen.LIST ? (
            <button onClick={handleBackNavigation} className="p-2 -ml-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"><ArrowLeftIcon /></button>
          ) : <div className="w-8" /> }
          <h1 className="text-xl font-bold text-slate-800 dark:text-slate-200">{headerText[screen]}</h1>
