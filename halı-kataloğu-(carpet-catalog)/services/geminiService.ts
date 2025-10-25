@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import type { Carpet } from '../types';
 
@@ -8,7 +7,6 @@ if (!API_KEY) {
 }
 
 const ai = new GoogleGenAI({ apiKey: API_KEY });
-const model = ai.models;
 
 // Helper function to convert a File object to a Gemini-compatible format
 const fileToGenerativePart = async (file: File) => {
@@ -28,7 +26,8 @@ export const extractCarpetDetails = async (imageFile: File): Promise<Partial<Car
 
 The JSON object must follow this schema:`;
 
-  const result = await model.generateContent({
+  // Fix: Call generateContent directly on ai.models
+  const result = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: [{ parts: [imagePart, {text: prompt}] }],
       config: {
@@ -67,7 +66,8 @@ export const findMatchingCarpet = async (imageFile: File, allCarpets: Carpet[]):
     const imagePart = await fileToGenerativePart(imageFile);
     
     // Step 1: Generate a description for the new image.
-    const descriptionResponse = await model.generateContent({
+    // Fix: Call generateContent directly on ai.models
+    const descriptionResponse = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: [{ parts: [imagePart, {text: "Describe this carpet in detail for matching purposes, focusing on pattern, prominent colors, texture, and style."}] }],
     });
@@ -88,7 +88,8 @@ Candidate Carpets:
 ${JSON.stringify(candidateCarpets)}
 `;
 
-    const matchResult = await model.generateContent({
+    // Fix: Call generateContent directly on ai.models
+    const matchResult = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: [{ parts: [{text: matchingPrompt}] }],
         config: {
@@ -96,7 +97,8 @@ ${JSON.stringify(candidateCarpets)}
           responseSchema: {
             type: Type.OBJECT,
             properties: {
-              best_match_id: { type: Type.STRING, nullable: true }
+              // FIX: Removed non-standard `nullable: true` property. The prompt already instructs the model to return null when appropriate.
+              best_match_id: { type: Type.STRING }
             }
           }
         }
