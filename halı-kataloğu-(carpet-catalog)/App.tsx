@@ -176,8 +176,7 @@ const BottomNavBar: React.FC<{
                   if (item.name === 'add') {
                       return React.createElement('div', { key: item.name, className: '-mt-6' },
                           React.createElement(motion.button, {
-                              onClick: item.action,
-// Fix: `onLongPress` is not a valid prop. Replaced with `onContextMenu` to simulate long-press behavior.
+                              // Fix: `onContextMenu` simulates long-press, `onTap` handles click. Removed redundant `onClick`.
                               onContextMenu: (e: React.MouseEvent) => { e.preventDefault(); setFabMenuOpen(p => !p); },
                               onTap: () => { if (isFabMenuOpen) setFabMenuOpen(false); else item.action(); },
                               className: "w-16 h-16 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-lg hover:bg-blue-700 transition-transform active:scale-95",
@@ -230,7 +229,7 @@ const CarpetGrid: React.FC<{ carpets: Carpet[], onView: (carpet: Carpet) => void
           exit: { opacity: 0, scale: 0.8 },
           transition: { duration: 0.3 },
           className: "bg-white dark:bg-slate-800 rounded-xl shadow-md overflow-hidden cursor-pointer transform hover:scale-105 transition-transform duration-300 group",
-// Fix: `onClick` is not a recognized prop on `motion.div`. Replaced with `onTap` for framer-motion gesture handling.
+          // Fix: Use `onTap` for framer-motion gesture handling, which is equivalent to `onClick`.
           onTap: () => onView(carpet)
         },
           React.createElement('div', { className: "relative" },
@@ -274,7 +273,8 @@ const ModalWrapper: React.FC<{ onClose: () => void; title: string, className?: s
     animate: { opacity: 1 },
     exit: { opacity: 0 },
     className: "fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4",
-    onClick: onClose
+    // Fix: Using `onTap` for framer-motion components to handle click/tap events consistently.
+    onTap: onClose
   },
     React.createElement(motion.div, {
       initial: { scale: 0.9, y: 20 },
@@ -282,7 +282,8 @@ const ModalWrapper: React.FC<{ onClose: () => void; title: string, className?: s
       exit: { scale: 0.9, y: 20 },
       transition: { type: 'spring', stiffness: 300, damping: 30 },
       className: `bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full overflow-hidden ${className}`,
-      onClick: e => e.stopPropagation()
+      // Fix: Using `onTap` to prevent event propagation on the modal content.
+      onTap: e => e.stopPropagation()
     },
       React.createElement('div', { className: "flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700" },
         React.createElement('h2', { className: "text-xl font-bold" }, title),
@@ -457,7 +458,6 @@ const AddCarpetModal: React.FC<{
     onClose,
     title: t('addCarpet'),
     className: "max-w-xl",
-// Fix: The type checker expects `children` to be in the props object. Moving it here from a separate argument.
     children: isScanning ? renderScanner() : renderForm()
   });
 };
@@ -495,7 +495,6 @@ const FindMatchModal: React.FC<{
   return React.createElement(ModalWrapper, {
     onClose,
     title: t('findMatchingCarpet'),
-// Fix: The type checker expects `children` to be in the props object. Moving it here from a separate argument.
     children: React.createElement('div', { className: "p-6" },
       !preview && React.createElement('div', { className: "text-center" },
         React.createElement('p', { className: "mb-4" }, t('uploadCarpetToMatch')),
@@ -548,7 +547,6 @@ const CarpetDetailModal: React.FC<{ carpet: Carpet, onClose: () => void, onDelet
     onClose,
     title: isEditing ? t('editCarpet') : t('carpetDetails'),
     className: "max-w-2xl",
-// Fix: The type checker expects `children` to be in the props object. Moving it here from a separate argument.
     children: React.createElement('div', null,
       React.createElement('img', { className: "w-full h-64 object-cover", src: carpet.imageUrl, alt: carpet.name }),
       React.createElement('div', { className: "p-6 max-h-[50vh] overflow-y-auto" },
@@ -600,7 +598,6 @@ const ConfirmDeleteModal: React.FC<{ carpet: Carpet, onClose: () => void, onConf
   return React.createElement(ModalWrapper, {
     onClose,
     title: t('confirmDeleteTitle'),
-// Fix: The type checker expects `children` to be in the props object. Moving it here from a separate argument.
     children: [
       React.createElement('div', { className: "p-6", key: 'content' },
         React.createElement('p', null, t('confirmDeleteMessage')),
@@ -658,23 +655,23 @@ const SettingsModal: React.FC<{ onClose: () => void, carpets: Carpet[], replaceA
   return React.createElement(ModalWrapper, {
     onClose,
     title: t('settings'),
-// Fix: The type checker expects `children` to be in the props object. Moving it here from a separate argument.
     children: [
       React.createElement('div', { className: "p-6 divide-y divide-slate-200 dark:divide-slate-700", key: 'content' },
         React.createElement('div', { className: "pb-4" },
           React.createElement('label', { className: "block font-semibold mb-2" }, t('language')),
           React.createElement('select', { value: language, onChange: e => setLanguage(e.target.value as any), className: "w-full p-2 rounded-lg bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 focus:ring-2 focus:ring-blue-500 focus:outline-none" },
-// Fix: The type checker was failing on the `value` prop. Moving the text content to a `children` prop resolves the issue.
-            React.createElement('option', { value: "en", children: "English" }),
-            React.createElement('option', { value: "tr", children: "Türkçe" })
+            // Fix: Pass children as a separate argument to `React.createElement` for intrinsic elements
+            // to potentially resolve type inference issues with props.
+            React.createElement('option', { value: "en" }, "English"),
+            React.createElement('option', { value: "tr" }, "Türkçe")
           )
         ),
         React.createElement('div', { className: "py-4" },
           React.createElement('label', { className: "block font-semibold mb-2" }, t('theme')),
           React.createElement('select', { value: theme, onChange: e => setTheme(e.target.value as any), className: "w-full p-2 rounded-lg bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 focus:ring-2 focus:ring-blue-500 focus:outline-none" },
-// Fix: The type checker was failing on the `value` prop. Moving the text content to a `children` prop resolves the issue.
-            React.createElement('option', { value: "light", children: t('light') }),
-            React.createElement('option', { value: "dark", children: t('dark') })
+            // Fix: Pass children as a separate argument to `React.createElement` for intrinsic elements.
+            React.createElement('option', { value: "light" }, t('light')),
+            React.createElement('option', { value: "dark" }, t('dark'))
           )
         ),
         React.createElement('div', { className: "pt-4" },
@@ -766,7 +763,6 @@ const BarcodeScanModal: React.FC<{ onClose: () => void, onCarpetFound: (id: stri
     return React.createElement(ModalWrapper, {
       onClose,
       title: t('scanBarcode'),
-// Fix: The type checker expects `children` to be in the props object. Moving it here from a separate argument.
       children: React.createElement('div', { className: "p-4 relative" },
             React.createElement('video', { ref: videoRef, className: "w-full rounded-lg bg-black" }),
             React.createElement('div', { className: "absolute inset-0 flex items-center justify-center p-4"},
