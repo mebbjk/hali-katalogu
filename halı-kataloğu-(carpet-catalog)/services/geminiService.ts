@@ -97,7 +97,10 @@ ${JSON.stringify(candidateCarpets)}
           responseSchema: {
             type: Type.OBJECT,
             properties: {
-              // FIX: Removed non-standard `nullable: true` property. The prompt already instructs the model to return null when appropriate.
+              // The prompt instructs the model to return a string ID or `null`.
+              // Since the response schema doesn't support union types (e.g., string | null),
+              // we declare it as a string. The model is smart enough to follow the prompt,
+              // and the client-side parsing logic correctly handles the `null` case.
               best_match_id: { type: Type.STRING }
             }
           }

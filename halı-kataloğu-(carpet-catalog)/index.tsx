@@ -3,26 +3,21 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import { SettingsProvider } from './contexts/SettingsContext';
 
+// Find the root element to mount the React app
 const rootElement = document.getElementById('root');
-if (!rootElement) throw new Error('Failed to find the root element');
-
-const root = ReactDOM.createRoot(rootElement);
-
-root.render(
-  <React.StrictMode>
-    <SettingsProvider>
-      <App />
-    </SettingsProvider>
-  </React.StrictMode>
-);
-
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    // The path needs to match the `base` in vite.config.ts
-    navigator.serviceWorker.register('/hali-katalogu/sw.js').then(registration => {
-      console.log('ServiceWorker registration successful with scope: ', registration.scope);
-    }, err => {
-      console.log('ServiceWorker registration failed: ', err);
-    });
-  });
+if (!rootElement) {
+  throw new Error("Failed to find the root element");
 }
+
+// Create a root and render the app using React.createElement
+ReactDOM.createRoot(rootElement).render(
+  React.createElement(
+    React.StrictMode,
+    null,
+    React.createElement(
+      SettingsProvider,
+      null,
+      React.createElement(App, null)
+    )
+  )
+);

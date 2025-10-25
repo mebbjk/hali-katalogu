@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom loader styles that were in index.html */
+body {
+    @apply bg-slate-50 dark:bg-slate-900;
+}
+#root:empty::before {
+    content: "Yükleniyor...";
+    @apply text-slate-500 block text-center pt-20 font-sans text-xl;
+}
+.dark #root:empty::before {
+    @apply text-slate-400;
+}

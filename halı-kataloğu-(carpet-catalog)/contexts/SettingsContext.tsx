@@ -3,6 +3,13 @@ import { translations, Language } from '../translations';
 
 type Theme = 'light' | 'dark';
 
+// Tell TypeScript about the global function we defined in index.html
+declare global {
+  interface Window {
+    applyTheme: (theme: Theme) => void;
+  }
+}
+
 interface SettingsContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
@@ -29,17 +36,10 @@ export const SettingsProvider: React.FC<SettingsProviderProps> = ({ children }) 
   });
 
   const [theme, setTheme] = useState<Theme>(() => {
-    try {
-      const storedTheme = localStorage.getItem('carpet_catalog_theme');
-      if (storedTheme === 'light' || storedTheme === 'dark') {
-        return storedTheme;
-      }
-      // If no theme is stored, respect the user's OS-level preference
-      if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        return 'dark';
-      }
-    } catch {
-      // Fallback in case of any error
+    // The FOUC script in index.html is the single source of truth for the initial theme.
+    // React's state should sync with what's already on the DOM to avoid conflicts.
+    if (typeof window !== 'undefined' && document.documentElement.classList.contains('dark')) {
+      return 'dark';
     }
     return 'light';
   });
@@ -55,13 +55,13 @@ export const SettingsProvider: React.FC<SettingsProviderProps> = ({ children }) 
   useEffect(() => {
     try {
       localStorage.setItem('carpet_catalog_theme', theme);
-      if (theme === 'dark') {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
+      // Call the global function from index.html to apply the theme.
+      // This is now the single source of truth for theme application.
+      if (window.applyTheme) {
+        window.applyTheme(theme);
       }
     } catch (error) {
-        console.error("Failed to save theme to localStorage", error);
+        console.error("Failed to apply theme settings", error);
     }
   }, [theme]);
 
