@@ -20,4 +20,5 @@ export enum AppScreen {
   SEARCH = 'SEARCH',
   DETAIL = 'DETAIL',
   FAVORITES = 'FAVORITES',
+  SETTINGS = 'SETTINGS',
 }

@@ -1,9 +1,9 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef } from 'react';
 import type { Carpet } from './types';
 import { AppScreen } from './types';
 import { useCarpets } from './hooks/useCarpets';
 import { extractCarpetDetails, findMatchingCarpet } from './services/geminiService';
-import { PlusIcon, SearchIcon, ListIcon, CameraIcon, TrashIcon, ArrowLeftIcon, SpinnerIcon, StarIcon } from './components/icons';
+import { PlusIcon, SearchIcon, ListIcon, CameraIcon, TrashIcon, ArrowLeftIcon, SpinnerIcon, StarIcon, CogIcon, UploadCloudIcon, DownloadCloudIcon } from './components/icons';
 
 // HELPER COMPONENTS (Defined outside main component to prevent re-rendering issues)
 
@@ -30,6 +30,7 @@ const BottomNav: React.FC<{ activeScreen: AppScreen; onNavigate: (screen: AppScr
         { screen: AppScreen.FAVORITES, icon: <StarIcon filled={activeScreen === AppScreen.FAVORITES} />, label: 'Favoriler' },
         { screen: AppScreen.ADD, icon: <PlusIcon />, label: 'Yeni Ekle' },
         { screen: AppScreen.SEARCH, icon: <SearchIcon />, label: 'Fotoğrafla Ara' },
+        { screen: AppScreen.SETTINGS, icon: <CogIcon />, label: 'Ayarlar' },
     ];
 
     return (
@@ -73,8 +74,12 @@ const ImagePicker: React.FC<{ onImageSelect: (file: File, dataUrl: string) => vo
     );
 };
 
+// FIX: Define a more specific type for the form fields to avoid type conflicts with boolean properties like 'isFavorite'.
+// An input 'value' cannot be a boolean, and this type ensures only string/number properties are used in the form.
+type EditableCarpetKeys = 'name' | 'brand' | 'model' | 'price' | 'size' | 'pattern' | 'texture' | 'yarnType';
+
 const CarpetForm: React.FC<{ carpetData: Partial<Carpet>; onDataChange: (field: keyof Carpet, value: any) => void }> = ({ carpetData, onDataChange }) => {
-    const fields: { key: keyof Carpet; label: string; type: string }[] = [
+    const fields: { key: EditableCarpetKeys; label: string; type: string }[] = [
         { key: 'name', label: 'Halı Adı', type: 'text' },
         { key: 'brand', label: 'Marka', type: 'text' },
         { key: 'model', label: 'Model', type: 'text' },
@@ -93,7 +98,7 @@ const CarpetForm: React.FC<{ carpetData: Partial<Carpet>; onDataChange: (field: 
                     <input
                         type={type}
                         id={key}
-                        value={carpetData[key as keyof Partial<Carpet>] || ''}
+                        value={carpetData[key] || ''}
                         onChange={(e) => onDataChange(key, type === 'number' ? parseInt(e.target.value) || 0 : e.target.value)}
                         className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-white p-2"
                     />
@@ -374,15 +379,101 @@ const CarpetDetailScreen: React.FC<{ carpet: Carpet; onDelete: (id: string) => v
     );
 };
 
+const SettingsScreen: React.FC<{ carpets: Carpet[]; onRestore: (carpets: Carpet[]) => void; onNavigate: (screen: AppScreen) => void }> = ({ carpets, onRestore, onNavigate }) => {
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleBackup = () => {
+        if (carpets.length === 0) {
+            alert("Yedeklenecek hiç halı yok.");
+            return;
+        }
+        const dataStr = JSON.stringify(carpets, null, 2);
+        const dataBlob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(dataBlob);
+        const link = document.createElement('a');
+        const date = new Date().toISOString().split('T')[0];
+        link.download = `hali-katalogu-yedek-${date}.json`;
+        link.href = url;
+        link.click();
+        URL.revokeObjectURL(url);
+    };
+
+    const handleRestoreClick = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const text = e.target?.result as string;
+                const restoredCarpets = JSON.parse(text);
+                
+                // Basic validation
+                if (!Array.isArray(restoredCarpets) || (restoredCarpets.length > 0 && !restoredCarpets[0].id)) {
+                    throw new Error("Geçersiz yedek dosyası formatı.");
+                }
+
+                if (window.confirm("Yedekten geri yüklemek istediğinize emin misiniz? Mevcut tüm halılarınız bu yedekle değiştirilecektir.")) {
+                    onRestore(restoredCarpets);
+                    alert("Veriler başarıyla geri yüklendi!");
+                    onNavigate(AppScreen.LIST);
+                }
+            } catch (error) {
+                alert("Yedek dosyası okunurken bir hata oluştu. Lütfen geçerli bir dosya seçtiğinizden emin olun.");
+                console.error("Restore error:", error);
+            }
+        };
+        reader.readAsText(file);
+        
+        // Reset the input value to allow selecting the same file again
+        event.target.value = '';
+    };
+
+    return (
+        <>
+            <Header title="Ayarlar" />
+            <main className="flex-grow p-4 space-y-6">
+                <div className="bg-gray-800 p-4 rounded-lg">
+                    <h2 className="text-lg font-semibold text-white mb-2">Veri Yönetimi</h2>
+                    <p className="text-sm text-gray-400 mb-4">
+                        Kataloğunuzu bir JSON dosyası olarak indirin. Bu dosyayı telefonunuzun 'Dosyalar' klasörüne veya Google Drive/OneDrive gibi bir bulut hizmetine kaydedebilirsiniz.
+                    </p>
+                    <div className="space-y-3">
+                        <button onClick={handleBackup} className="w-full flex items-center justify-center bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors">
+                            <DownloadCloudIcon />
+                            <span>Yedek Dosyası İndir</span>
+                        </button>
+                        <button onClick={handleRestoreClick} className="w-full flex items-center justify-center bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition-colors">
+                            <UploadCloudIcon />
+                            <span>Yedekten Geri Yükle</span>
+                        </button>
+                        <input
+                            type="file"
+                            ref={fileInputRef}
+                            className="hidden"
+                            accept=".json"
+                            onChange={handleFileChange}
+                        />
+                    </div>
+                </div>
+            </main>
+        </>
+    );
+};
+
 
 // MAIN APP COMPONENT
 export default function App() {
     const [screen, setScreen] = useState<AppScreen>(AppScreen.LIST);
-    const { carpets, addCarpet, deleteCarpet, toggleFavorite } = useCarpets();
+    const [previousScreen, setPreviousScreen] = useState<AppScreen>(AppScreen.LIST);
+    const { carpets, addCarpet, deleteCarpet, toggleFavorite, saveCarpets } = useCarpets();
     const [selectedCarpetId, setSelectedCarpetId] = useState<string | null>(null);
 
     const handleNavigate = (targetScreen: AppScreen) => {
-        // Allow staying on detail screen if navigating to same logical group
         if (targetScreen !== AppScreen.DETAIL) {
             setSelectedCarpetId(null);
         }
@@ -390,6 +481,7 @@ export default function App() {
     };
 
     const handleSelectCarpet = (id: string) => {
+        setPreviousScreen(screen); // Remember where we came from
         setSelectedCarpetId(id);
         setScreen(AppScreen.DETAIL);
     };
@@ -417,9 +509,11 @@ export default function App() {
                 return <SearchCarpetScreen carpets={carpets} onSelectCarpet={handleSelectCarpet} onBack={() => handleNavigate(AppScreen.LIST)} />;
             case AppScreen.FAVORITES:
                  return <FavoritesScreen carpets={carpets} onSelectCarpet={handleSelectCarpet} />;
+            case AppScreen.SETTINGS:
+                return <SettingsScreen carpets={carpets} onRestore={saveCarpets} onNavigate={handleNavigate} />;
             case AppScreen.DETAIL:
                 if (selectedCarpet) {
-                    return <CarpetDetailScreen carpet={selectedCarpet} onDelete={handleDeleteCarpet} onToggleFavorite={toggleFavorite} onBack={() => handleNavigate(AppScreen.LIST)} />;
+                    return <CarpetDetailScreen carpet={selectedCarpet} onDelete={handleDeleteCarpet} onToggleFavorite={toggleFavorite} onBack={() => handleNavigate(previousScreen)} />;
                 }
                 return <CarpetListScreen carpets={carpets} onSelectCarpet={handleSelectCarpet} />; // Fallback
             case AppScreen.LIST:
@@ -428,8 +522,7 @@ export default function App() {
         }
     };
     
-    // Determine active screen for bottom nav, grouping detail with its origin
-    const activeNavScreen = screen === AppScreen.DETAIL ? (selectedCarpet?.isFavorite ? AppScreen.FAVORITES : AppScreen.LIST) : screen;
+    const activeNavScreen = screen === AppScreen.DETAIL ? previousScreen : screen;
 
     return (
         <div className="h-screen w-screen overflow-hidden antialiased">

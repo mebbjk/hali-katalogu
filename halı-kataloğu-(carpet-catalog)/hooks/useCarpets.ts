@@ -48,5 +48,5 @@ export const useCarpets = () => {
     }
   }, [carpets, updateCarpet]);
 
-  return { carpets, addCarpet, deleteCarpet, updateCarpet, toggleFavorite };
+  return { carpets, addCarpet, deleteCarpet, updateCarpet, toggleFavorite, saveCarpets };
 };
