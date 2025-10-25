@@ -1,70 +1,89 @@
-const CACHE_NAME = 'hali-katalogu-cache-v1';
 
-// This is not an exhaustive list, but the core shell of the app.
-// The fetch handler will cache other assets dynamically.
-const urlsToCache = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/carpet-icon.svg',
+const CACHE_NAME = 'hali-katalogu-cache-v1';
+// This list should include the essential files for the app shell to load.
+const URLS_TO_CACHE = [
+  '/hali-katalogu/',
+  '/hali-katalogu/index.html',
+  '/hali-katalogu/manifest.json',
+  '/hali-katalogu/carpet-icon.svg',
 ];
 
-// Install the service worker and cache the app shell
-self.addEventListener('install', event => {
+// Install event: cache the app shell
+self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => {
-        console.log('Opened cache');
-        return cache.addAll(urlsToCache);
+      .then((cache) => {
+        console.log('ServiceWorker: Opened cache');
+        return cache.addAll(URLS_TO_CACHE);
       })
-      .then(() => self.skipWaiting()) // Activate the new service worker immediately
+      .catch(err => {
+        console.error('ServiceWorker: Failed to cache app shell', err);
+      })
   );
 });
 
-// Clean up old caches when a new service worker is activated
-self.addEventListener('activate', event => {
+// Activate event: clean up old caches
+self.addEventListener('activate', (event) => {
   const cacheWhitelist = [CACHE_NAME];
   event.waitUntil(
-    caches.keys().then(cacheNames => {
+    caches.keys().then((cacheNames) => {
       return Promise.all(
-        cacheNames.map(cacheName => {
+        cacheNames.map((cacheName) => {
           if (cacheWhitelist.indexOf(cacheName) === -1) {
-            console.log('Deleting old cache:', cacheName);
+            console.log('ServiceWorker: Deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
       );
-    }).then(() => self.clients.claim()) // Take control of all open clients
+    })
   );
+  return self.clients.claim();
 });
 
-// Serve assets from cache with a stale-while-revalidate strategy
-self.addEventListener('fetch', event => {
-  // We only want to cache GET requests
-  if (event.request.method !== 'GET') {
+// Fetch event: serve from cache, fall back to network, and cache new requests
+self.addEventListener('fetch', (event) => {
+  // We only want to cache GET requests.
+  if (event.request.method !== 'GET' || event.request.url.includes('generativelanguage.googleapis.com')) {
+    // For non-GET requests or API calls, just use the network.
     return;
   }
-
+  
   event.respondWith(
-    caches.open(CACHE_NAME).then(async (cache) => {
-      // 1. Try to get the response from the cache
-      const cachedResponse = await cache.match(event.request);
-
-      // 2. In the background, fetch a fresh version from the network
-      const fetchPromise = fetch(event.request).then(networkResponse => {
-        // If the fetch is successful, update the cache with the new version
-        if (networkResponse && networkResponse.status === 200) {
-          cache.put(event.request, networkResponse.clone());
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.match(event.request).then((response) => {
+        // Return response from cache if found
+        if (response) {
+          // Asynchronously update the cache in the background
+          const fetchRequest = event.request.clone();
+          fetch(fetchRequest).then(res => {
+              if (res && res.status === 200) {
+                  cache.put(event.request, res);
+              }
+          }).catch(err => {
+              // Network failed, which is fine, we served from cache.
+          });
+          return response;
         }
-        return networkResponse;
-      }).catch(err => {
-        // Fetch failed, probably offline. This is okay if we have a cached response.
-        console.warn('Fetch failed; serving from cache if available.', err);
-      });
 
-      // 3. Return the cached response immediately if it exists, otherwise wait for the network
-      // This makes the app feel incredibly fast ("instant loading")
-      return cachedResponse || fetchPromise;
+        // If not in cache, fetch from network
+        const fetchRequest = event.request.clone();
+        return fetch(fetchRequest).then((response) => {
+            // Check if we received a valid response
+            if (!response || response.status !== 200) {
+              return response;
+            }
+
+            // Clone the response because it's a stream and can only be consumed once.
+            const responseToCache = response.clone();
+            cache.put(event.request, responseToCache);
+
+            return response;
+          }
+        ).catch(err => {
+            console.error('ServiceWorker: Fetch failed', err);
+            // You could return a custom offline page here if you had one.
+        });
+      });
     })
   );
 });
