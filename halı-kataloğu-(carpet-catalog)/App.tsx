@@ -13,6 +13,7 @@ const App = () => {
   const { t, language, setLanguage, theme, setTheme } = useSettings();
 
   const [screen, setScreen] = useState<AppScreen>(AppScreen.LIST);
+  const [history, setHistory] = useState<AppScreen[]>([AppScreen.LIST]);
   const [selectedCarpetId, setSelectedCarpetId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
@@ -20,7 +21,6 @@ const App = () => {
   const [searchResult, setSearchResult] = useState<Carpet | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [carpetToDelete, setCarpetToDelete] = useState<string | null>(null);
-  const [previousScreen, setPreviousScreen] = useState<AppScreen>(AppScreen.LIST);
 
 
   useEffect(() => {
@@ -29,9 +29,7 @@ const App = () => {
 
 
   const navigate = (newScreen: AppScreen, carpetId?: string) => {
-    if (newScreen !== screen) {
-      setPreviousScreen(screen);
-    }
+    setHistory(prev => [...prev, newScreen]);
     setScreen(newScreen);
     setSelectedCarpetId(carpetId || null);
     setError(null);
@@ -39,9 +37,15 @@ const App = () => {
   };
 
   const handleBackNavigation = () => {
-    setScreen(previousScreen);
-    setError(null);
-    setSearchResult(null);
+    setHistory(prev => {
+        const newHistory = [...prev];
+        newHistory.pop();
+        const previousScreen = newHistory[newHistory.length - 1] || AppScreen.LIST;
+        setScreen(previousScreen);
+        setError(null);
+        setSearchResult(null);
+        return newHistory;
+    });
   };
 
   const handleImageUploadForAdd = async (file: File) => {
@@ -67,6 +71,7 @@ const App = () => {
     } catch (err) {
       setError(t('errorExtractingDetails'));
       console.error(err);
+      handleBackNavigation(); // Go back to ADD screen on error
     } finally {
       setLoading(false);
     }
@@ -103,7 +108,7 @@ const App = () => {
   const handleDelete = () => {
     if(carpetToDelete){
         deleteCarpet(carpetToDelete);
-        setScreen(previousScreen); // Go back after deleting
+        handleBackNavigation();
     }
     setShowDeleteModal(false);
     setCarpetToDelete(null);
@@ -116,7 +121,7 @@ const App = () => {
       case AppScreen.SEARCH:
         return <SearchCarpetScreen onImageUpload={handleImageUploadForSearch} result={searchResult} onNavigate={navigate} />;
       case AppScreen.DETAIL:
-        return selectedCarpet ? <CarpetDetailScreen carpet={selectedCarpet} onBack={handleBackNavigation} onUpdate={updateCarpet} onDelete={confirmDelete} onToggleFavorite={toggleFavorite} /> : <div className="p-4">{t('noCarpets')}</div>;
+        return selectedCarpet ? <CarpetDetailScreen carpet={selectedCarpet} onUpdate={updateCarpet} onDelete={confirmDelete} onToggleFavorite={toggleFavorite} /> : <div className="p-4">{t('noCarpets')}</div>;
       case AppScreen.FAVORITES:
         return <CarpetListScreen carpets={carpets.filter(c => c.isFavorite)} onSelectCarpet={(id) => navigate(AppScreen.DETAIL, id)} emptyMessage={t('noFavorites')} />;
       case AppScreen.SETTINGS:
@@ -139,7 +144,7 @@ const App = () => {
   return (
     <div className="flex flex-col h-screen max-w-md mx-auto bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans shadow-2xl">
       <header className="sticky top-0 bg-slate-100/80 dark:bg-slate-950/80 backdrop-blur-sm shadow-sm p-4 flex items-center justify-between z-10">
-         {screen !== AppScreen.LIST ? (
+         {history.length > 1 ? (
            <button onClick={handleBackNavigation} className="p-2 -ml-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"><ArrowLeftIcon /></button>
          ) : <div className="w-8" /> }
          <h1 className="text-xl font-bold text-slate-800 dark:text-slate-200">{headerText[screen]}</h1>
@@ -178,7 +183,7 @@ const LoadingOverlay = ({ message }: { message: string }) => (
     </div>
 );
 
-const BottomNav = ({ currentScreen, onNavigate }: { currentScreen: AppScreen; onNavigate: (screen: AppScreen) => void; }) => {
+const BottomNav = ({ currentScreen, onNavigate }: { currentScreen: AppScreen; onNavigate: (screen: AppScreen, carpetId?: string) => void; }) => {
     const { t } = useSettings();
     const navItems = [
         { screen: AppScreen.LIST, icon: <ListIcon />, label: t('list') },
@@ -281,7 +286,7 @@ const CarpetListScreen = ({ carpets, onSelectCarpet, emptyMessage }: { carpets: 
 
 type EditableCarpetProperties = 'name' | 'brand' | 'model' | 'price' | 'size' | 'pattern' | 'texture' | 'yarnType' | 'type' | 'description';
 
-const CarpetDetailScreen = ({ carpet, onBack, onUpdate, onDelete, onToggleFavorite }: { carpet: Carpet; onBack: () => void; onUpdate: (carpet: Carpet) => void; onDelete: (id: string) => void; onToggleFavorite: (id: string) => void; }) => {
+const CarpetDetailScreen = ({ carpet, onUpdate, onDelete, onToggleFavorite }: { carpet: Carpet; onUpdate: (carpet: Carpet) => void; onDelete: (id: string) => void; onToggleFavorite: (id: string) => void; }) => {
     const { t } = useSettings();
     const [isEditing, setIsEditing] = useState(false);
     const [formData, setFormData] = useState(carpet);
