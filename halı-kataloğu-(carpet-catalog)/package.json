@@ -4,6 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "homepage": "https://mebbjk.github.io/hali-katalogu/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mebbjk/hali-katalogu.git"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
