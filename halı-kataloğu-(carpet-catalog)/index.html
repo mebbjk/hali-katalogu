@@ -1,13 +1,15 @@
 <!DOCTYPE html>
-<html lang="tr">
-  <head>
+<html lang="tr" class="">
+<head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/carpet-icon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Halı Kataloğu</title>
+    <title>Halı Kataloğu (Carpet Catalog)</title>
+    <meta name="description" content="An AI-powered mobile application to catalog carpets.">
     <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content="#f9fafb" />
-    
+    <link rel="icon" href="/carpet-icon.svg" type="image/svg+xml">
+    <meta name="theme-color" content="#1f2937">
+
+    <!-- Tailwind CSS JIT CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -15,56 +17,49 @@
       }
     </script>
     
+    <!-- FOUC Prevention and Theme Application Script -->
     <script>
-      // Single source of truth for applying the theme.
       function applyTheme(theme) {
-        const root = document.documentElement;
-        const metaThemeColor = document.querySelector('meta[name="theme-color"]');
         if (theme === 'dark') {
-          root.classList.add('dark');
-          if (metaThemeColor) {
-            metaThemeColor.setAttribute('content', '#0f172a');
-          }
+          document.documentElement.classList.add('dark');
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#1f2937');
         } else {
-          root.classList.remove('dark');
-          if (metaThemeColor) {
-            metaThemeColor.setAttribute('content', '#f9fafb');
-          }
+          document.documentElement.classList.remove('dark');
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#f9fafb');
         }
       }
-
-      // FOUC prevention script.
-      (function() {
-        let theme = 'light';
-        try {
-          const storedTheme = localStorage.getItem('carpet_catalog_theme');
-          if (storedTheme === 'dark' || storedTheme === 'light') {
-            theme = storedTheme;
-          } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-            theme = 'dark';
-          }
-        } catch (e) { /* Ignore */ }
-        applyTheme(theme);
-      })();
+      try {
+        const theme = localStorage.getItem('carpet_catalog_theme');
+        const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (theme === 'dark' || (!theme && systemPrefersDark)) {
+          applyTheme('dark');
+        } else {
+          applyTheme('light');
+        }
+      } catch (e) {
+        applyTheme('light');
+      }
     </script>
-    
-<script type="importmap">
+
+    <!-- Import Map -->
+    <script type="importmap">
 {
   "imports": {
     "react": "https://aistudiocdn.com/react@^19.2.0",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
     "@google/genai": "https://aistudiocdn.com/@google/genai@^1.27.0",
     "uuid": "https://aistudiocdn.com/uuid@^13.0.0",
-    "framer-motion": "https://aistudiocdn.com/framer-motion@^12.23.24",
     "vite": "https://aistudiocdn.com/vite@^7.1.12",
-    "react/": "https://aistudiocdn.com/react@^19.2.0/"
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "framer-motion": "https://aistudiocdn.com/framer-motion@^12.23.24"
   }
 }
 </script>
 <link rel="stylesheet" href="/index.css">
 </head>
-  <body>
+<body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
-  </body>
+</body>
 </html>
