@@ -253,23 +253,70 @@ const FormInput = ({ label, name, value, onChange, placeholder = '', type = 'tex
     );
 };
 
-const FormSelect = ({ label, name, value, onChange, options, required = false }: { label: string, name: string, value: string, onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void, options: string[], required?: boolean }) => {
+const MultiTagInput = ({ label, values, onValuesChange, placeholder, options }: { label: string, values: string[], onValuesChange: (newValues: string[]) => void, placeholder: string, options?: string[] }) => {
     const { t } = useSettings();
-    return e('div', { className: 'mb-4' },
-        e('label', { htmlFor: name, className: 'block text-sm font-medium text-slate-700 dark:text-slate-300' }, `${label}${required ? ' *' : ''}`),
+    const [inputValue, setInputValue] = useState('');
+
+    const handleAdd = () => {
+        const valueToAdd = inputValue.trim();
+        if (valueToAdd && !values.includes(valueToAdd)) {
+            onValuesChange([...values, valueToAdd]);
+            setInputValue(''); // Reset for next input
+        }
+    };
+    
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            handleAdd();
+        }
+    };
+
+    const handleRemove = (valueToRemove: string) => {
+        onValuesChange(values.filter(v => v !== valueToRemove));
+    };
+
+    const inputArea = options ?
         e('select', {
-            id: name,
-            name: name,
-            value: value,
-            onChange: onChange,
-            required: required,
-            className: 'mt-1 block w-full pl-3 pr-10 py-2 text-base bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md',
+            value: inputValue,
+            onChange: (e: React.ChangeEvent<HTMLSelectElement>) => setInputValue(e.target.value),
+            className: 'flex-grow p-2 bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-l-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm',
         },
-            e('option', { value: "", disabled: true }, t('select_one')),
-            ...options.map(opt => e('option', { key: opt, value: opt }, opt)),
-            e('option', { value: "Other" }, t('other'))
+            e('option', { value: "" }, placeholder),
+            ...options.map(opt => e('option', { key: opt, value: opt }, opt))
+        ) :
+        e('input', {
+            type: 'text',
+            value: inputValue,
+            onChange: (e: React.ChangeEvent<HTMLInputElement>) => setInputValue(e.target.value),
+            onKeyDown: handleKeyDown,
+            placeholder: placeholder,
+            className: 'flex-grow p-2 bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-l-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm',
+        });
+        
+    return e('div', { className: 'mb-4' },
+        e('label', { className: 'block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1' }, label),
+        e('div', { className: 'flex flex-wrap gap-2 p-2 min-h-[44px] bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md' },
+            ...values.map(value => e('span', {
+                key: value,
+                className: 'flex items-center bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-sm font-medium px-2.5 py-1 rounded-full'
+            },
+                value,
+                e('button', {
+                    type: 'button',
+                    onClick: () => handleRemove(value),
+                    className: 'ml-2 text-blue-600 dark:text-blue-300 hover:text-blue-800 dark:hover:text-blue-100'
+                }, e(XMarkIcon, { className: 'h-4 w-4' }))
+            ))
         ),
-        required && !value && e('p', { className: 'text-xs text-red-500 mt-1' }, t('required_field'))
+        e('div', { className: 'flex mt-2' },
+            inputArea,
+            e('button', {
+                type: 'button',
+                onClick: handleAdd,
+                className: 'px-4 py-2 bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-200 rounded-r-md hover:bg-slate-300 dark:hover:bg-slate-500'
+            }, t('add'))
+        )
     );
 };
 
@@ -321,29 +368,10 @@ const CarpetDetailModal = ({ carpet, onClose, onUpdate, onDelete, onToggleFavori
 
     if (!carpet || !editedCarpet) return null;
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
         setEditedCarpet(prev => prev ? { ...prev, [name]: name === 'price' ? Number(value) : value } : null);
     };
-    
-    const handleSizeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const value = e.target.value;
-        setEditedCarpet(prev => prev ? { ...prev, size: value === "Other" ? "" : value } : null);
-    };
-    
-    const handleCustomSizeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setEditedCarpet(prev => prev ? { ...prev, size: e.target.value } : null);
-    };
-
-    const handleYarnChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const value = e.target.value;
-        setEditedCarpet(prev => prev ? { ...prev, yarnType: value === "Other" ? "" : value } : null);
-    };
-    
-    const handleCustomYarnChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setEditedCarpet(prev => prev ? { ...prev, yarnType: e.target.value } : null);
-    };
-
 
     const handleSave = () => {
         if (editedCarpet) {
@@ -359,22 +387,22 @@ const CarpetDetailModal = ({ carpet, onClose, onUpdate, onDelete, onToggleFavori
         }
     };
 
-    const isCustomSize = !STANDARD_CARPET_SIZES.includes(editedCarpet.size);
-    const isCustomYarn = !STANDARD_YARN_TYPES.includes(editedCarpet.yarnType);
-
-    const renderDetail = (label: string, value?: string | number) => e('div', { key: label, className: 'py-2' },
-        e('p', { className: 'text-sm font-medium text-slate-500' }, label),
-        e('p', { className: 'text-md text-slate-800 dark:text-slate-200' }, value || 'N/A')
-    );
+    const renderDetail = (label: string, value?: string | number | string[]) => {
+        const displayValue = Array.isArray(value) ? (value.length > 0 ? value.join(', ') : 'N/A') : (value || 'N/A');
+        return e('div', { key: label, className: 'py-2' },
+            e('p', { className: 'text-sm font-medium text-slate-500' }, label),
+            e('p', { className: 'text-md text-slate-800 dark:text-slate-200' }, displayValue)
+        );
+    }
     
     const detailFields = [
         { label: t('brand'), value: carpet.brand },
         { label: t('model'), value: carpet.model },
         { label: t('price'), value: `${carpet.price} TL` },
-        { label: t('size'), value: carpet.size },
+        { label: t('sizes'), value: carpet.size },
         { label: t('pattern'), value: carpet.pattern },
         { label: t('texture'), value: carpet.texture },
-        { label: t('yarn_type'), value: carpet.yarnType },
+        { label: t('yarn_types'), value: carpet.yarnType },
         { label: t('type'), value: carpet.type },
         { label: t('barcode_id'), value: carpet.barcodeId },
         { label: t('qr_code_id'), value: carpet.qrCodeId },
@@ -410,10 +438,30 @@ const CarpetDetailModal = ({ carpet, onClose, onUpdate, onDelete, onToggleFavori
                 isEditing ? (
                     e('div', null, 
                         ...editFields.map(f => e(FormInput, { key: f.name, ...f, value: editedCarpet[f.name as keyof Carpet], onChange: handleChange })),
-                        e(FormSelect, { label: t('size'), name: 'size', value: isCustomSize ? 'Other' : editedCarpet.size, onChange: handleSizeChange, options: STANDARD_CARPET_SIZES }),
-                        isCustomSize && e(FormInput, { label: t('enter_custom_size'), name: 'size', value: editedCarpet.size, onChange: handleCustomSizeChange }),
-                        e(FormSelect, { label: t('yarn_type'), name: 'yarnType', value: isCustomYarn ? 'Other' : editedCarpet.yarnType, onChange: handleYarnChange, options: STANDARD_YARN_TYPES }),
-                        isCustomYarn && e(FormInput, { label: t('yarn_type'), name: 'yarnType', value: editedCarpet.yarnType, onChange: handleCustomYarnChange })
+                        e(MultiTagInput, {
+                            label: t('sizes'),
+                            values: editedCarpet.size,
+                            onValuesChange: (newSizes: string[]) => setEditedCarpet(prev => prev ? { ...prev, size: newSizes } : null),
+                            placeholder: t('enter_custom_size'),
+                        }),
+                        e('div', { className: 'flex flex-wrap gap-2 my-2' },
+                            ...STANDARD_CARPET_SIZES.map(s => e('button', {
+                                type: 'button',
+                                onClick: () => {
+                                    if (!editedCarpet.size.includes(s)) {
+                                        setEditedCarpet(prev => prev ? { ...prev, size: [...prev.size, s] } : null);
+                                    }
+                                },
+                                className: 'px-2 py-1 text-xs bg-slate-200 dark:bg-slate-600 rounded'
+                            }, `+ ${s}`))
+                        ),
+                         e(MultiTagInput, {
+                            label: t('yarn_types'),
+                            values: editedCarpet.yarnType,
+                            onValuesChange: (newYarns: string[]) => setEditedCarpet(prev => prev ? { ...prev, yarnType: newYarns } : null),
+                            placeholder: t('select_yarn_type'),
+                            options: STANDARD_YARN_TYPES
+                        })
                     )
                 ) : (
                     e(React.Fragment, null,
@@ -449,7 +497,7 @@ const CarpetDetailModal = ({ carpet, onClose, onUpdate, onDelete, onToggleFavori
 const AddCarpetView = ({ onCarpetAdded }: { onCarpetAdded: () => void }) => {
     const { t } = useSettings();
     const { addCarpet, getDetailsFromImage } = useCarpets();
-    const [carpetData, setCarpetData] = useState<Partial<Carpet>>({ name: '', brand: '', model: '', price: 0, size: '', pattern: '', texture: '', yarnType: '', type: '', description: '', barcodeId: '', qrCodeId: '' });
+    const [carpetData, setCarpetData] = useState<Partial<Carpet>>({ name: '', brand: '', model: '', price: 0, size: [], pattern: '', texture: '', yarnType: [], type: '', description: '', barcodeId: '', qrCodeId: '' });
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [isAiLoading, setIsAiLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
@@ -460,33 +508,9 @@ const AddCarpetView = ({ onCarpetAdded }: { onCarpetAdded: () => void }) => {
     const [infoModal, setInfoModal] = useState<{ isOpen: boolean; title: string; message: string; }>({ isOpen: false, title: '', message: '' });
 
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
         setCarpetData(prev => ({ ...prev, [name]: name === 'price' ? Number(value) : value }));
-    };
-
-    const handleSizeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const value = e.target.value;
-        if (value === "Other") {
-            setCarpetData(prev => ({ ...prev, size: '' }));
-        } else {
-            setCarpetData(prev => ({ ...prev, size: value }));
-        }
-    };
-    const handleCustomSizeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setCarpetData(prev => ({ ...prev, size: e.target.value }));
-    };
-
-    const handleYarnChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const value = e.target.value;
-        if (value === "Other") {
-            setCarpetData(prev => ({ ...prev, yarnType: '' }));
-        } else {
-            setCarpetData(prev => ({ ...prev, yarnType: value }));
-        }
-    };
-     const handleCustomYarnChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setCarpetData(prev => ({ ...prev, yarnType: e.target.value }));
     };
 
     const handleImageSelect = (file: File) => {
@@ -549,9 +573,6 @@ const AddCarpetView = ({ onCarpetAdded }: { onCarpetAdded: () => void }) => {
         setIsBarcodeScannerOpen(false);
     };
     
-    const isCustomSize = !STANDARD_CARPET_SIZES.includes(carpetData.size || "");
-    const isCustomYarn = !STANDARD_YARN_TYPES.includes(carpetData.yarnType || "");
-
     return e('div', null,
         e(InfoModal, {
             isOpen: infoModal.isOpen,
@@ -581,12 +602,33 @@ const AddCarpetView = ({ onCarpetAdded }: { onCarpetAdded: () => void }) => {
             e(FormInput, { label: t('model'), name: 'model', value: carpetData.model, onChange: handleChange }),
             e(FormInput, { label: t('price'), name: 'price', value: carpetData.price, onChange: handleChange, type: 'number' }),
             
-            e(FormSelect, { label: t('size'), name: 'size', value: isCustomSize ? 'Other' : (carpetData.size || ''), onChange: handleSizeChange, options: STANDARD_CARPET_SIZES }),
-            isCustomSize && e(FormInput, { label: t('enter_custom_size'), name: 'size', value: carpetData.size, onChange: handleCustomSizeChange }),
-            
-            e(FormSelect, { label: t('yarn_type'), name: 'yarnType', value: isCustomYarn ? 'Other' : (carpetData.yarnType || ''), onChange: handleYarnChange, options: STANDARD_YARN_TYPES }),
-            isCustomYarn && e(FormInput, { label: t('yarn_type'), name: 'yarnType', value: carpetData.yarnType, onChange: handleCustomYarnChange }),
+            e(MultiTagInput, {
+                label: t('sizes'),
+                values: carpetData.size || [],
+                onValuesChange: (newSizes) => setCarpetData(prev => ({ ...prev, size: newSizes })),
+                placeholder: t('enter_custom_size')
+            }),
+            e('div', { className: 'flex flex-wrap gap-2 -mt-2 mb-2' },
+                ...STANDARD_CARPET_SIZES.map(s => e('button', {
+                    type: 'button',
+                    key: s,
+                    onClick: () => {
+                        if (!carpetData.size?.includes(s)) {
+                           setCarpetData(prev => ({ ...prev, size: [...(prev.size || []), s]}));
+                        }
+                    },
+                    className: 'px-2 py-1 text-xs bg-slate-200 dark:bg-slate-600 rounded-md hover:bg-slate-300 dark:hover:bg-slate-500'
+                }, `+ ${s}`))
+            ),
 
+            e(MultiTagInput, {
+                label: t('yarn_types'),
+                values: carpetData.yarnType || [],
+                onValuesChange: (newYarns) => setCarpetData(prev => ({ ...prev, yarnType: newYarns })),
+                placeholder: t('select_yarn_type'),
+                options: STANDARD_YARN_TYPES
+            }),
+            
             e(FormInput, { label: t('pattern'), name: 'pattern', value: carpetData.pattern, onChange: handleChange }),
             e(FormInput, { label: t('texture'), name: 'texture', value: carpetData.texture, onChange: handleChange }),
             e(FormInput, { label: t('type'), name: 'type', value: carpetData.type, onChange: handleChange }),

@@ -21,7 +21,7 @@ const fileToGenerativePart = async (file: File) => {
 
 export const extractCarpetDetails = async (imageFile: File): Promise<Partial<Carpet>> => {
   const imagePart = await fileToGenerativePart(imageFile);
-  const prompt = `You are an expert carpet cataloger. Analyze the provided image of a carpet and extract its features. Respond ONLY with a valid JSON object. Do not include any other text or markdown formatting. If a value is unknown, use "Unknown". For price, provide an estimated integer value without currency symbols.
+  const prompt = `You are an expert carpet cataloger. Analyze the provided image of a carpet and extract its features. Respond ONLY with a valid JSON object. Do not include any other text or markdown formatting. If a value is unknown, use "Unknown" or an empty array where appropriate. For price, provide an estimated integer value without currency symbols.
 
 The JSON object must follow this schema:`;
 
@@ -37,10 +37,10 @@ The JSON object must follow this schema:`;
                 brand: { type: Type.STRING, description: "Identify the brand if a logo is visible, otherwise 'Unknown'" },
                 model: { type: Type.STRING, description: "Identify the model if visible, otherwise 'Unknown'" },
                 price: { type: Type.INTEGER, description: "An estimated price as an integer." },
-                size: { type: Type.STRING, description: "Estimate the size, e.g., '200x300 cm'" },
+                size: { type: Type.ARRAY, description: "Estimate the size, e.g., ['200x300 cm'], or list common available sizes if it appears to be a product photo.", items: { type: Type.STRING } },
                 pattern: { type: Type.STRING, description: "Describe the main pattern, e.g., 'Geometric', 'Floral', 'Abstract', 'Solid'" },
                 texture: { type: Type.STRING, description: "Describe the texture, e.g., 'Plush', 'Low-pile', 'Shaggy', 'Woven'" },
-                yarnType: { type: Type.STRING, description: "Guess the yarn type, e.g., 'Wool', 'Polypropylene', 'Nylon', 'Cotton'" },
+                yarnType: { type: Type.ARRAY, description: "Guess the yarn types, e.g., ['Wool', 'Polyester']", items: { type: Type.STRING } },
                 type: { type: Type.STRING, description: "Classify as 'Carpet', 'Rug', or 'Plush'" },
                 description: { type: Type.STRING, description: "Provide a one-paragraph detailed description covering colors, style, and overall look." },
             }
@@ -73,9 +73,18 @@ export const findMatchingCarpet = async (imageFile: File, allCarpets: Carpet[]):
     const targetDescription = descriptionResponse.text ?? '';
 
     // Step 2: Ask Gemini to find the best match from the existing carpet descriptions.
-    const candidateCarpets = allCarpets.map(c => ({ id: c.id, description: c.description }));
+    const candidateCarpets = allCarpets.map(c => ({ 
+        id: c.id, 
+        description: c.description,
+        // Also include structured data for better matching
+        name: c.name,
+        brand: c.brand,
+        pattern: c.pattern,
+        sizes: c.size,
+        yarns: c.yarnType
+    }));
 
-    const matchingPrompt = `You are a carpet matching engine. I have a 'target_description' for a carpet I'm looking for. I also have a list of 'candidate_carpets' from my inventory.
+    const matchingPrompt = `You are a carpet matching engine. I have a 'target_description' for a carpet I'm looking for. I also have a list of 'candidate_carpets' from my inventory, which includes their descriptions and other data.
 Your task is to identify which candidate is the best match for the target.
 Respond ONLY with a valid JSON object in the format: {"best_match_id": "the_id_of_the_best_matching_carpet"}.
 If no candidate is a reasonably good match, respond with {"best_match_id": null}.
