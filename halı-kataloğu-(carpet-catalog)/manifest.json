@@ -1,7 +1,8 @@
 {
   "name": "Halı Kataloğu",
   "short_name": "Halılar",
-  "start_url": ".",
+  "start_url": "/hali-katalogu/",
+  "scope": "/hali-katalogu/",
   "display": "standalone",
   "background_color": "#111827",
   "theme_color": "#1f2937",
@@ -9,7 +10,7 @@
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/carpet-icon.svg",
+      "src": "carpet-icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"
