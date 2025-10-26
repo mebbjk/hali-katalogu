@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useCarpets } from './hooks/useCarpets';
 import { useSettings } from './hooks/useSettings';
 import type { Carpet } from './types';
