@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/carpet-icon.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta name="description" content="An AI-powered mobile application to catalog carpets." />
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#1f2937" />
+  <title>Halı Kataloğu</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    // Configure Tailwind to use the 'class' strategy for dark mode,
+    // enabling manual theme switching.
+    tailwind.config = {
+      darkMode: 'class'
+    }
+  </script>
+  <script>
+    // This script prevents a flash of unstyled content (FOUC) and applies the theme instantly.
+    // It's the single source of truth for applying the theme class and meta color.
+    function applyTheme(theme) {
+      const root = document.documentElement;
+      const isDark = theme === 'dark';
+      
+      // Use explicit add/remove for robustness instead of toggle.
+      if (isDark) {
+        root.classList.add('dark');
+      } else {
+        root.classList.remove('dark');
+      }
+      
+      document.querySelector('meta[name="theme-color"]').setAttribute('content', isDark ? '#1f2937' : '#f9fafb');
+    }
+
+    try {
+      const savedTheme = localStorage.getItem('carpet_catalog_theme');
+      if (savedTheme === 'light' || savedTheme === 'dark') {
+        applyTheme(savedTheme);
+      } else {
+        // Fallback to system preference if no theme is saved
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        applyTheme(prefersDark ? 'dark' : 'light');
+      }
+    } catch (e) {
+      // Fallback for browsers that don't support localStorage or have it disabled
+      applyTheme('dark');
+    }
+  </script>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.27.0",
+    "uuid": "https://aistudiocdn.com/uuid@^13.0.0",
+    "vite": "https://aistudiocdn.com/vite@^7.1.12",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body>
+  <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>
