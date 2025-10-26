@@ -17,7 +17,13 @@ interface ToastContextType {
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined);
 
-export const ToastProvider = ({ children }: { children: ReactNode }) => {
+// FIX: Refactored ToastProvider to use React.FC and a props interface for type consistency.
+// This resolves an error where the 'children' prop was not being recognized at its usage site in index.tsx.
+interface ToastProviderProps {
+  children: ReactNode;
+}
+
+export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   const addToast = useCallback((message: string, type: ToastType = 'success') => {
@@ -30,9 +36,9 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   return (
-    React.createElement(ToastContext.Provider, { value: { toasts, addToast, removeToast } },
-      children
-    )
+    <ToastContext.Provider value={{ toasts, addToast, removeToast }}>
+      {children}
+    </ToastContext.Provider>
   );
 };
 
