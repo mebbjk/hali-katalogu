@@ -663,17 +663,19 @@ const SettingsModal: React.FC<{ onClose: () => void, carpets: Carpet[], replaceA
         React.createElement('div', { className: "pb-4" },
           React.createElement('label', { className: "block font-semibold mb-2" }, t('language')),
           React.createElement('select', { value: language, onChange: e => setLanguage(e.target.value as any), className: "w-full p-2 rounded-lg bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 focus:ring-2 focus:ring-blue-500 focus:outline-none" },
-            // FIX: Pass children as the third argument to React.createElement to fix type inference issues.
-            React.createElement('option', { value: "en" }, "English"),
-            React.createElement('option', { value: "tr" }, "Türkçe")
+            // Fix for line 665: The `value` prop was causing a TypeScript overload error. Passing the text content
+            // via the `children` prop helps TypeScript correctly infer the props for the <option> element.
+            React.createElement('option', { value: "en", children: "English" }),
+            React.createElement('option', { value: "tr", children: "Türkçe" })
           )
         ),
         React.createElement('div', { className: "py-4" },
           React.createElement('label', { className: "block font-semibold mb-2" }, t('theme')),
           React.createElement('select', { value: theme, onChange: e => setTheme(e.target.value as any), className: "w-full p-2 rounded-lg bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 focus:ring-2 focus:ring-blue-500 focus:outline-none" },
-            // FIX: Pass children as the third argument to React.createElement to fix type inference issues.
-            React.createElement('option', { value: "light" }, t('light')),
-            React.createElement('option', { value: "dark" }, t('dark'))
+            // Fix for line 673: The `value` prop was causing a TypeScript overload error. Passing the text content
+            // via the `children` prop helps TypeScript correctly infer the props for the <option> element.
+            React.createElement('option', { value: "light", children: t('light') }),
+            React.createElement('option', { value: "dark", children: t('dark') })
           )
         ),
         React.createElement('div', { className: "pt-4" },
