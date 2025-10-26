@@ -69,6 +69,9 @@ export const translations: Record<Language, Record<string, string>> = {
     'ok': 'OK',
     'api_key_missing_title': 'API Key Not Configured',
     'api_key_missing_message': 'The Gemini API key has not been configured for this application. The app owner needs to set it up in the hosting environment for AI features to work.',
+    'select_one': 'Select one...',
+    'other': 'Other',
+    'enter_custom_size': 'Enter custom size (e.g., 150x250 cm)',
   },
   tr: {
     'app_title': 'Halı Kataloğu',
@@ -137,5 +140,8 @@ export const translations: Record<Language, Record<string, string>> = {
     'ok': 'Tamam',
     'api_key_missing_title': 'API Anahtarı Yapılandırılmamış',
     'api_key_missing_message': 'Bu uygulama için Gemini API anahtarı yapılandırılmamış. Yapay zeka özelliklerinin çalışması için uygulama sahibinin bunu barındırma ortamında ayarlaması gerekir.',
+    'select_one': 'Birini seçin...',
+    'other': 'Diğer',
+    'enter_custom_size': 'Özel boyut girin (örn: 150x250 cm)',
   },
 };

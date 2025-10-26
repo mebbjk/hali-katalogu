@@ -2,10 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { Carpet } from '../types';
 import { extractCarpetDetails, findMatchingCarpet } from '../services/geminiService';
+import { getAllCarpets, addCarpetDB, updateCarpetDB, deleteCarpetDB, replaceAllCarpetsDB } from '../services/dbService';
 
-const STORAGE_KEY = 'carpet_catalog_data';
-
-// Helper to convert a file to a Base64 data URL for persistent storage
+// Helper to convert a file to a Base64 data URL for persistent storage in IndexedDB
 const fileToDataUrl = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -20,82 +19,105 @@ export const useCarpets = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Load carpets from localStorage on initial render
+  // Load carpets from IndexedDB on initial render
   useEffect(() => {
-    try {
-      setLoading(true);
-      const storedCarpets = localStorage.getItem(STORAGE_KEY);
-      if (storedCarpets) {
-        setCarpets(JSON.parse(storedCarpets));
+    const loadCarpets = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const storedCarpets = await getAllCarpets();
+        storedCarpets.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        setCarpets(storedCarpets);
+      } catch (e) {
+        console.error("Failed to load carpets from DB", e);
+        setError("Failed to load carpet data.");
+      } finally {
+        setLoading(false);
       }
-    } catch (e) {
-      console.error("Failed to load carpets from storage", e);
-      setError("Failed to load carpet data.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // Save carpets to localStorage whenever they change
-  useEffect(() => {
-    try {
-      // Avoid saving during initial load
-      if(!loading) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(carpets));
-      }
-    } catch (e) {
-      console.error("Failed to save carpets to storage", e);
-      setError("Failed to save carpet data.");
-    }
-  }, [carpets, loading]);
-  
-  const addCarpet = useCallback(async (carpetData: Partial<Carpet>, imageFile: File): Promise<Carpet> => {
-    // Convert image to a persistent data URL (Base64) instead of a temporary blob URL.
-    const imageUrl = await fileToDataUrl(imageFile);
-    const newCarpet: Carpet = {
-      id: uuidv4(),
-      imageUrl: imageUrl,
-      name: carpetData.name || 'Unnamed Carpet',
-      brand: carpetData.brand || 'Unknown',
-      model: carpetData.model || 'Unknown',
-      price: carpetData.price || 0,
-      size: carpetData.size || 'Unknown',
-      pattern: carpetData.pattern || 'Unknown',
-      texture: carpetData.texture || 'Unknown',
-      yarnType: carpetData.yarnType || 'Unknown',
-      type: carpetData.type || 'Unknown',
-      description: carpetData.description || 'No description provided.',
-      isFavorite: false,
-      createdAt: new Date().toISOString(),
-      barcodeId: carpetData.barcodeId,
-      qrCodeId: carpetData.qrCodeId,
     };
-    setCarpets(prev => [newCarpet, ...prev]);
-    return newCarpet;
+    loadCarpets();
   }, []);
 
-  const updateCarpet = useCallback((updatedCarpet: Carpet) => {
-    setCarpets(prev => prev.map(c => c.id === updatedCarpet.id ? updatedCarpet : c));
+  const addCarpet = useCallback(async (carpetData: Partial<Carpet>, imageFile: File): Promise<Carpet> => {
+    try {
+      const imageUrl = await fileToDataUrl(imageFile);
+      const newCarpet: Carpet = {
+        id: uuidv4(),
+        imageUrl: imageUrl,
+        name: carpetData.name || 'Unnamed Carpet',
+        brand: carpetData.brand || 'Unknown',
+        model: carpetData.model || 'Unknown',
+        price: carpetData.price || 0,
+        size: carpetData.size || 'Unknown',
+        pattern: carpetData.pattern || 'Unknown',
+        texture: carpetData.texture || 'Unknown',
+        yarnType: carpetData.yarnType || 'Unknown',
+        type: carpetData.type || 'Unknown',
+        description: carpetData.description || 'No description provided.',
+        isFavorite: false,
+        createdAt: new Date().toISOString(),
+        barcodeId: carpetData.barcodeId,
+        qrCodeId: carpetData.qrCodeId,
+      };
+      await addCarpetDB(newCarpet);
+      setCarpets(prev => [newCarpet, ...prev].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+      return newCarpet;
+    } catch (e) {
+        console.error("Failed to add carpet:", e);
+        setError("Failed to save carpet data.");
+        throw e;
+    }
   }, []);
 
-  const deleteCarpet = useCallback((carpetId: string) => {
-    // No need to revoke blob URLs anymore as we are using data URLs.
-    setCarpets(prev => prev.filter(c => c.id !== carpetId));
+  const updateCarpet = useCallback(async (updatedCarpet: Carpet) => {
+    try {
+        await updateCarpetDB(updatedCarpet);
+        setCarpets(prev => prev.map(c => c.id === updatedCarpet.id ? updatedCarpet : c));
+    } catch(e) {
+        console.error("Failed to update carpet:", e);
+        setError("Failed to save carpet data.");
+    }
   }, []);
 
-  const toggleFavorite = useCallback((carpetId: string) => {
-      setCarpets(prev => 
-          prev.map(c => c.id === carpetId ? {...c, isFavorite: !c.isFavorite} : c)
-      );
+  const deleteCarpet = useCallback(async (carpetId: string) => {
+    try {
+        await deleteCarpetDB(carpetId);
+        setCarpets(prev => prev.filter(c => c.id !== carpetId));
+    } catch (e) {
+        console.error("Failed to delete carpet:", e);
+        setError("Failed to delete carpet data.");
+    }
   }, []);
 
-  const replaceAllCarpets = useCallback((newCarpets: Carpet[]) => {
-    // A simple validation to ensure we're not setting nonsense data.
-    if (Array.isArray(newCarpets)) {
-        // No need to revoke old blob URLs.
-        setCarpets(newCarpets);
-    } else {
+  const toggleFavorite = useCallback(async (carpetId: string) => {
+      const carpet = carpets.find(c => c.id === carpetId);
+      if (!carpet) return;
+      
+      const updatedCarpet = { ...carpet, isFavorite: !carpet.isFavorite };
+      try {
+        await updateCarpetDB(updatedCarpet);
+        setCarpets(prev => 
+            prev.map(c => c.id === carpetId ? updatedCarpet : c)
+        );
+      } catch (e) {
+        console.error("Failed to toggle favorite:", e);
+        setError("Failed to save carpet data.");
+      }
+  }, [carpets]);
+
+  const replaceAllCarpets = useCallback(async (newCarpets: Carpet[]) => {
+    if (!Array.isArray(newCarpets)) {
         console.error("Import failed: provided data is not an array.");
+        setError("Import failed: invalid data format.");
+        return;
+    }
+    try {
+        await replaceAllCarpetsDB(newCarpets);
+        newCarpets.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        setCarpets(newCarpets);
+    } catch(e) {
+        console.error("Failed to import carpets:", e);
+        setError("Failed to import carpet data.");
     }
   }, []);
 

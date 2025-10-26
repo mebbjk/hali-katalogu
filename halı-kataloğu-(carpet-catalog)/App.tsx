@@ -8,6 +8,14 @@ import {
 
 const e = React.createElement;
 
+// --- Constants for Dropdowns ---
+const STANDARD_CARPET_SIZES = [
+    "80x150 cm", "80x300 cm", "120x180 cm", "160x230 cm", "200x290 cm", "240x340 cm"
+];
+const STANDARD_YARN_TYPES = [
+    "Polypropylene", "Wool", "Polyester", "Acrylic", "Cotton", "Viscose", "Jute", "Sisal", "Nylon"
+];
+
 // Barcode Detection API type definitions
 declare global {
     interface Window {
@@ -283,13 +291,14 @@ const AddCarpetView = ({ addCarpet, getDetailsFromImage, onFinished, setInfoModa
         { id: 'brand', label: t('brand'), type: 'text' },
         { id: 'model', label: t('model'), type: 'text' },
         { id: 'price', label: t('price'), type: 'number' },
-        { id: 'size', label: t('size'), type: 'text' },
         { id: 'pattern', label: t('pattern'), type: 'text' },
         { id: 'texture', label: t('texture'), type: 'text' },
-        { id: 'yarnType', label: t('yarn_type'), type: 'text' },
         { id: 'type', label: t('type'), type: 'text' },
     ];
     
+    const isCustomSize = details.size ? !STANDARD_CARPET_SIZES.includes(details.size) : false;
+    const sizeSelectValue = isCustomSize ? 'Other' : details.size || '';
+
     return e(React.Fragment, null, 
         e('form', { onSubmit: handleSubmit, className: 'space-y-4' },
             e(ImageUploader, { onImageSelect: handleImageSelect }),
@@ -314,6 +323,47 @@ const AddCarpetView = ({ addCarpet, getDetailsFromImage, onFinished, setInfoModa
                     className: 'mt-1 w-full p-2 rounded-md bg-slate-200 dark:bg-slate-700 border border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500'
                 })
             )),
+
+            // --- Custom Size Input ---
+            e('div', { key: 'size' },
+                e('label', { htmlFor: 'size-select', className: 'block text-sm font-medium' }, t('size')),
+                e('select', {
+                    id: 'size-select',
+                    value: sizeSelectValue,
+                    onChange: (ev: React.ChangeEvent<HTMLSelectElement>) => {
+                        const value = ev.target.value;
+                        handleInputChange('size', value !== 'Other' ? value : '');
+                    },
+                    className: 'mt-1 w-full p-2 rounded-md bg-slate-200 dark:bg-slate-700 border border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500'
+                },
+                    e('option', { value: '' }, t('select_one')),
+                    ...STANDARD_CARPET_SIZES.map(s => e('option', { key: s, value: s }, s)),
+                    e('option', { value: 'Other' }, t('other'))
+                ),
+                (sizeSelectValue === 'Other') && e('input', {
+                    type: 'text',
+                    placeholder: t('enter_custom_size'),
+                    value: details.size || '',
+                    onChange: (ev: React.ChangeEvent<HTMLInputElement>) => handleInputChange('size', ev.target.value),
+                    className: 'mt-2 w-full p-2 rounded-md bg-slate-200 dark:bg-slate-700 border border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500'
+                })
+            ),
+
+            // --- Yarn Type Dropdown ---
+            e('div', { key: 'yarnType' },
+                e('label', { htmlFor: 'yarnType', className: 'block text-sm font-medium' }, t('yarn_type')),
+                e('select', {
+                    id: 'yarnType',
+                    value: details.yarnType || '',
+                    onChange: (ev: React.ChangeEvent<HTMLSelectElement>) => handleInputChange('yarnType', ev.target.value),
+                    className: 'mt-1 w-full p-2 rounded-md bg-slate-200 dark:bg-slate-700 border border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500'
+                },
+                    e('option', { value: '' }, t('select_one')),
+                    ...STANDARD_YARN_TYPES.map(type => e('option', { key: type, value: type }, type)),
+                    e('option', { value: 'Other' }, t('other')),
+                    e('option', { value: 'Unknown' }, t('unknown'))
+                )
+            ),
 
             e('div', { key: 'barcodeId' },
                 e('label', { htmlFor: 'barcodeId', className: 'block text-sm font-medium' }, t('barcode_id')),
@@ -533,11 +583,68 @@ const CarpetDetailModal = ({ carpet, onClose, onUpdate, onDelete, onToggleFavori
             onClose();
         }
     };
+
+    const handleInputChange = (field: keyof Carpet, value: string | number) => {
+        setEditedCarpet(c => ({ ...c, [field]: value }));
+    };
     
     const DetailItem = ({ label, value }: { label: string, value: string | number | undefined }) => value ? e('div', {},
         e('p', { className: 'text-sm font-medium text-slate-500 dark:text-slate-400' }, label),
         e('p', {}, String(value))
     ) : null;
+
+    const isCustomSize = editedCarpet.size ? !STANDARD_CARPET_SIZES.includes(editedCarpet.size) : false;
+    const sizeSelectValue = isCustomSize ? 'Other' : editedCarpet.size || '';
+
+    const EditForm = () => e(React.Fragment, null,
+        e(EditItem, { label: t('name'), field: 'name' }),
+        e(EditItem, { label: t('brand'), field: 'brand' }),
+        e(EditItem, { label: t('model'), field: 'model' }),
+        e(EditItem, { label: t('price'), field: 'price', type: 'number' }),
+        // --- Custom Size Input ---
+        e('div', {},
+            e('label', { className: 'block text-sm font-medium' }, t('size')),
+            e('select', {
+                value: sizeSelectValue,
+                onChange: (ev: React.ChangeEvent<HTMLSelectElement>) => {
+                    const value = ev.target.value;
+                    handleInputChange('size', value !== 'Other' ? value : '');
+                },
+                className: 'mt-1 w-full p-2 rounded-md bg-slate-200 dark:bg-slate-700'
+            },
+                e('option', { value: '' }, t('select_one')),
+                ...STANDARD_CARPET_SIZES.map(s => e('option', { key: s, value: s }, s)),
+                e('option', { value: 'Other' }, t('other'))
+            ),
+            (sizeSelectValue === 'Other') && e('input', {
+                type: 'text',
+                placeholder: t('enter_custom_size'),
+                value: editedCarpet.size || '',
+                onChange: (ev: React.ChangeEvent<HTMLInputElement>) => handleInputChange('size', ev.target.value),
+                className: 'mt-2 w-full p-2 rounded-md bg-slate-200 dark:bg-slate-700'
+            })
+        ),
+        e(EditItem, { label: t('pattern'), field: 'pattern' }),
+        e(EditItem, { label: t('texture'), field: 'texture' }),
+         // --- Yarn Type Dropdown ---
+        e('div', {},
+            e('label', { className: 'block text-sm font-medium' }, t('yarn_type')),
+            e('select', {
+                value: editedCarpet.yarnType || '',
+                onChange: (ev: React.ChangeEvent<HTMLSelectElement>) => handleInputChange('yarnType', ev.target.value),
+                className: 'mt-1 w-full p-2 rounded-md bg-slate-200 dark:bg-slate-700'
+            },
+                e('option', { value: '' }, t('select_one')),
+                ...STANDARD_YARN_TYPES.map(type => e('option', { key: type, value: type }, type)),
+                e('option', { value: 'Other' }, t('other')),
+                e('option', { value: 'Unknown' }, t('unknown'))
+            )
+        ),
+        e(EditItem, { label: t('type'), field: 'type' }),
+        e(EditItem, { label: t('barcode_id'), field: 'barcodeId' }),
+        e(EditItem, { label: t('qr_code_id'), field: 'qrCodeId' }),
+        e(EditItem, { label: t('description'), field: 'description', type: 'textarea' }),
+    );
 
     const EditItem = ({ label, field, type = 'text' }: { label: string, field: keyof Carpet, type?: string }) => e('div', {},
         e('label', { className: 'block text-sm font-medium' }, label),
@@ -565,20 +672,7 @@ const CarpetDetailModal = ({ carpet, onClose, onUpdate, onDelete, onToggleFavori
             e('div', { className: 'p-4 overflow-y-auto space-y-4' },
                 e('img', { src: carpet.imageUrl, alt: carpet.name, className: 'w-full h-64 object-contain rounded-md bg-slate-100 dark:bg-slate-700' }),
                 isEditing
-                    ? e(React.Fragment, null,
-                        e(EditItem, { label: t('name'), field: 'name' }),
-                        e(EditItem, { label: t('brand'), field: 'brand' }),
-                        e(EditItem, { label: t('model'), field: 'model' }),
-                        e(EditItem, { label: t('price'), field: 'price', type: 'number' }),
-                        e(EditItem, { label: t('size'), field: 'size' }),
-                        e(EditItem, { label: t('pattern'), field: 'pattern' }),
-                        e(EditItem, { label: t('texture'), field: 'texture' }),
-                        e(EditItem, { label: t('yarn_type'), field: 'yarnType' }),
-                        e(EditItem, { label: t('type'), field: 'type' }),
-                        e(EditItem, { label: t('barcode_id'), field: 'barcodeId' }),
-                        e(EditItem, { label: t('qr_code_id'), field: 'qrCodeId' }),
-                        e(EditItem, { label: t('description'), field: 'description', type: 'textarea' }),
-                    )
+                    ? e(EditForm, null)
                     : e(React.Fragment, null,
                         e('p', {}, carpet.description),
                         e('div', { className: 'grid grid-cols-2 gap-4 pt-4' },
