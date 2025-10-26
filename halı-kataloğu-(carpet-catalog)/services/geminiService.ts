@@ -1,13 +1,10 @@
-// Add Vite client types to fix TypeScript error for import.meta.env
-/// <reference types="vite/client" />
-
 // FIX: Per Gemini API guidelines, import `GoogleGenAI` and `Type` directly.
 import { GoogleGenAI, Type } from "@google/genai";
 import type { Carpet } from '../types';
 
-// FIX: Initialize the AI client using Vite's environment variable syntax (`import.meta.env`).
-// This ensures the API key from the `.env.local` file (prefixed with `VITE_`) is correctly loaded.
-const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
+// FIX: Per Gemini API guidelines, the API key must be obtained from `process.env.API_KEY`.
+// This change also resolves errors related to Vite's `import.meta.env` type definitions.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 
 // Helper function to convert a File object to a Gemini-compatible format
@@ -51,8 +48,8 @@ The JSON object must follow this schema:`;
       }
   });
 
-  // FIX: Per Gemini API guidelines, the `.text` property on the response object should be used directly.
-  const text = result.text.trim();
+  // FIX: Added a nullish coalescing operator to handle cases where the response text might be undefined, preventing a build error.
+  const text = (result.text ?? '').trim();
   try {
     return JSON.parse(text);
   } catch (e) {
@@ -72,8 +69,8 @@ export const findMatchingCarpet = async (imageFile: File, allCarpets: Carpet[]):
         model: 'gemini-2.5-flash',
         contents: { parts: [imagePart, {text: "Describe this carpet in detail for matching purposes, focusing on pattern, prominent colors, texture, and style."}] },
     });
-    // FIX: Per Gemini API guidelines, the `.text` property on the response object should be used directly.
-    const targetDescription = descriptionResponse.text;
+    // FIX: Added a nullish coalescing operator to handle cases where the response text might be undefined, preventing a build error.
+    const targetDescription = descriptionResponse.text ?? '';
 
     // Step 2: Ask Gemini to find the best match from the existing carpet descriptions.
     const candidateCarpets = allCarpets.map(c => ({ id: c.id, description: c.description }));
@@ -108,8 +105,8 @@ ${JSON.stringify(candidateCarpets)}
         }
     });
 
-    // FIX: Per Gemini API guidelines, the `.text` property on the response object should be used directly.
-    const matchText = matchResult.text.trim();
+    // FIX: Added a nullish coalescing operator to handle cases where the response text might be undefined, preventing a build error.
+    const matchText = (matchResult.text ?? '').trim();
     try {
         const result = JSON.parse(matchText);
         const bestMatchId = result.best_match_id;
