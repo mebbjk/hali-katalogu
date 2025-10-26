@@ -73,8 +73,8 @@ const BarcodeScannerModal = ({ onScanSuccess, onClose, scanType }: { onScanSucce
     
     return e('div', { className: 'fixed inset-0 z-[100] bg-black/80 flex flex-col items-center justify-center', onClick: onClose },
         e('div', { className: 'relative w-full max-w-md bg-slate-900 rounded-lg p-4', onClick: e => e.stopPropagation() },
-            // Fix: Using React.createElement directly to avoid potential scope-related type inference issues with the 'e' alias.
-            React.createElement('video', { ref: videoRef, className: 'w-full rounded-md', autoPlay: true, playsInline: true, muted: true }),
+            // Fix: Use the 'e' alias to resolve a TypeScript overload error and maintain consistency.
+            e('video', { ref: videoRef, className: 'w-full rounded-md', autoPlay: true, playsInline: true, muted: true }),
             error && e('p', { className: 'text-red-500 text-center mt-2' }, error),
             e('p', { className: 'text-white text-center mt-4' }, scanType === 'barcode' ? t('scan_barcode_instruction') : t('scan_qrcode_instruction')),
             e('button', { onClick: onClose, className: 'absolute top-2 right-2 p-2 bg-black/50 rounded-full' }, e(XMarkIcon, { className: 'h-6 w-6 text-white' }))
