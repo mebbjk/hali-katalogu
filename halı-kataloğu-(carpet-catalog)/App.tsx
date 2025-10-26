@@ -72,8 +72,9 @@ const BarcodeScannerModal = ({ onScanSuccess, onClose, scanType }: { onScanSucce
     }, [onScanSuccess, scanType]);
     
     return e('div', { className: 'fixed inset-0 z-[100] bg-black/80 flex flex-col items-center justify-center', onClick: onClose },
-        e('div', { className: 'relative w-full max-w-md bg-slate-900 rounded-lg p-4', onClick: e => e.stopPropagation() },
-            // Fix: Use the 'e' alias to resolve a TypeScript overload error and maintain consistency.
+        // FIX: Using an untyped event parameter with the `e` alias for `React.createElement` can confuse TypeScript's type overload resolution.
+        // Explicitly typing the event parameter `evt` as `React.MouseEvent` resolves the ambiguity.
+        e('div', { className: 'relative w-full max-w-md bg-slate-900 rounded-lg p-4', onClick: (evt: React.MouseEvent) => evt.stopPropagation() },
             e('video', { ref: videoRef, className: 'w-full rounded-md', autoPlay: true, playsInline: true, muted: true }),
             error && e('p', { className: 'text-red-500 text-center mt-2' }, error),
             e('p', { className: 'text-white text-center mt-4' }, scanType === 'barcode' ? t('scan_barcode_instruction') : t('scan_qrcode_instruction')),
@@ -219,7 +220,7 @@ const ImageUploader = ({ onImageSelect, currentImageUrl }: { onImageSelect: (fil
     );
 };
 
-const AddCarpetView = ({ addCarpet, getDetailsFromImage, onFinished }: { addCarpet: (data: Partial<Carpet>, file: File) => Promise<Carpet>, getDetailsFromImage: (file: File) => Promise<Partial<Carpet>>, onFinished: () => void }) => {
+const AddCarpetView = ({ addCarpet, getDetailsFromImage, onFinished, setInfoModal }: { addCarpet: (data: Partial<Carpet>, file: File) => Promise<Carpet>, getDetailsFromImage: (file: File) => Promise<Partial<Carpet>>, onFinished: () => void, setInfoModal: (info: { title: string, message: string } | null) => void }) => {
     const { t } = useSettings();
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [details, setDetails] = useState<Partial<Carpet>>({});
@@ -241,7 +242,14 @@ const AddCarpetView = ({ addCarpet, getDetailsFromImage, onFinished }: { addCarp
             const extractedDetails = await getDetailsFromImage(imageFile);
             setDetails(prev => ({...prev, ...extractedDetails}));
         } catch (e: any) {
-            setError(e.message || t('ai_analysis_error'));
+            if (e.message.includes("API_KEY")) {
+                setInfoModal({ 
+                    title: 'api_key_missing_title', 
+                    message: 'api_key_missing_message'
+                });
+            } else {
+                setError(e.message || t('ai_analysis_error'));
+            }
         } finally {
             setIsAnalyzing(false);
         }
@@ -360,7 +368,7 @@ const AddCarpetView = ({ addCarpet, getDetailsFromImage, onFinished }: { addCarp
     );
 };
 
-const MatchFinderView = ({ findMatchByImage, onMatchFound }: { findMatchByImage: (file: File) => Promise<Carpet | null>, onMatchFound: (carpet: Carpet | null) => void }) => {
+const MatchFinderView = ({ findMatchByImage, onMatchFound, setInfoModal }: { findMatchByImage: (file: File) => Promise<Carpet | null>, onMatchFound: (carpet: Carpet | null) => void, setInfoModal: (info: { title: string, message: string } | null) => void }) => {
     const { t } = useSettings();
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [isSearching, setIsSearching] = useState(false);
@@ -385,7 +393,14 @@ const MatchFinderView = ({ findMatchByImage, onMatchFound }: { findMatchByImage:
             const foundMatch = await findMatchByImage(imageFile);
             setMatch(foundMatch || 'not_found');
         } catch (e: any) {
-            setError(e.message || t('ai_match_error'));
+             if (e.message.includes("API_KEY")) {
+                setInfoModal({ 
+                    title: 'api_key_missing_title', 
+                    message: 'api_key_missing_message'
+                });
+            } else {
+                setError(e.message || t('ai_match_error'));
+            }
         } finally {
             setIsSearching(false);
         }
@@ -603,6 +618,23 @@ const LoadingSpinner = () => e('div', { className: 'flex justify-center items-ce
     e(Spinner, { className: 'h-12 w-12 animate-spin text-blue-500' })
 );
 
+const InfoModal = ({ title, message, onClose, t }: { title: string, message: string, onClose: () => void, t: (key: string) => string }) => {
+    return e('div', { className: 'fixed inset-0 z-[101] bg-black/50 flex items-center justify-center p-4', onClick: onClose },
+        e('div', { className: 'bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-sm', onClick: (evt: React.MouseEvent) => evt.stopPropagation() },
+            e('div', { className: 'p-4 border-b dark:border-slate-700' },
+                e('h3', { className: 'text-lg font-semibold' }, title)
+            ),
+            e('div', { className: 'p-4' },
+                e('p', { className: 'text-slate-600 dark:text-slate-300' }, message)
+            ),
+            e('div', { className: 'p-4 border-t dark:border-slate-700 flex justify-end' },
+                e('button', { onClick: onClose, className: 'px-4 py-2 rounded-md bg-blue-600 text-white' }, t('ok'))
+            )
+        )
+    );
+};
+
+
 const App = () => {
   const { t } = useSettings();
   const {
@@ -612,6 +644,7 @@ const App = () => {
   const [currentView, setCurrentView] = useState('home');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCarpet, setSelectedCarpet] = useState<Carpet | null>(null);
+  const [infoModal, setInfoModal] = useState<{ title: string; message: string } | null>(null);
 
   const filteredCarpets = useMemo(() => {
     const query = searchQuery.toLowerCase();
@@ -634,9 +667,9 @@ const App = () => {
       case 'favorites':
         return e(CarpetGrid, { carpets: favoriteCarpets, onCarpetClick: setSelectedCarpet, isFavorites: true });
       case 'add':
-        return e(AddCarpetView, { addCarpet, getDetailsFromImage, onFinished: () => setCurrentView('home') });
+        return e(AddCarpetView, { addCarpet, getDetailsFromImage, onFinished: () => setCurrentView('home'), setInfoModal });
       case 'match':
-        return e(MatchFinderView, { findMatchByImage, onMatchFound: (carpet) => { if(carpet) setSelectedCarpet(carpet); setCurrentView('home'); } });
+        return e(MatchFinderView, { findMatchByImage, onMatchFound: (carpet) => { if(carpet) setSelectedCarpet(carpet); setCurrentView('home'); }, setInfoModal });
       case 'settings':
         return e(SettingsView, { replaceAllCarpets });
       default:
@@ -653,7 +686,8 @@ const App = () => {
       ),
       e(BottomNav, { currentView, setCurrentView }),
       selectedCarpet ? e(CarpetDetailModal, { carpet: selectedCarpet, onClose: () => setSelectedCarpet(null), onUpdate: updateCarpet, onDelete: deleteCarpet, onToggleFavorite: toggleFavorite }) : null,
-      loading ? e(LoadingSpinner, null) : null
+      loading ? e(LoadingSpinner, null) : null,
+      infoModal ? e(InfoModal, { title: t(infoModal.title), message: t(infoModal.message), onClose: () => setInfoModal(null), t }) : null
     )
   );
 };
