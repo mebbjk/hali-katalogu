@@ -66,6 +66,9 @@ export const translations: Record<Language, Record<string, string>> = {
     'scan_qr_code': 'Scan QR Code',
     'scan_barcode_instruction': 'Point your camera at a barcode.',
     'scan_qrcode_instruction': 'Point your camera at a QR code.',
+    'ok': 'OK',
+    'api_key_missing_title': 'API Key Not Configured',
+    'api_key_missing_message': 'The Gemini API key has not been configured for this application. The app owner needs to set it up in the hosting environment for AI features to work.',
   },
   tr: {
     'app_title': 'Halı Kataloğu',
@@ -131,5 +134,8 @@ export const translations: Record<Language, Record<string, string>> = {
     'scan_qr_code': 'QR Kod Tara',
     'scan_barcode_instruction': 'Kameranızı bir barkoda doğrultun.',
     'scan_qrcode_instruction': 'Kameranızı bir QR koduna doğrultun.',
+    'ok': 'Tamam',
+    'api_key_missing_title': 'API Anahtarı Yapılandırılmamış',
+    'api_key_missing_message': 'Bu uygulama için Gemini API anahtarı yapılandırılmamış. Yapay zeka özelliklerinin çalışması için uygulama sahibinin bunu barındırma ortamında ayarlaması gerekir.',
   },
 };
