@@ -1,36 +1,32 @@
 {
   "name": "hali-katalogu",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
-  "homepage": "https://mebbjk.github.io/hali-katalogu/",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/mebbjk/hali-katalogu.git"
-  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "deploy": "npm run build && npx gh-pages -d dist"
   },
   "dependencies": {
-    "@google/genai": "^0.14.0",
-    "framer-motion": "^11.0.8",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "uuid": "^9.0.1"
+    "@google/genai": "^1.27.0",
+    "framer-motion": "^12.23.24",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
-    "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
     "@types/uuid": "^9.0.8",
-    "eslint": "^8.57.0",
-    "eslint-plugin-react-hooks": "^4.6.0",
-    "eslint-plugin-react-refresh": "^0.4.6",
     "gh-pages": "^6.1.1",
-    "typescript": "^5.2.2",
-    "vite": "^5.2.0"
+    "typescript": "^5.4.5",
+    "vite": "^5.4.21"
+  },
+  "homepage": "https://mebbjk.github.io/hali-katalogu/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mebbjk/hali-katalogu.git"
   }
 }
