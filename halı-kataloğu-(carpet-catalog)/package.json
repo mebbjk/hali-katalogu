@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "deploy": "npm run build && npx gh-pages -d dist -r https://github.com/mebbjk/hali-katalogu.git"
+    "deploy": "npm install && npm run build && npx gh-pages -d dist -r https://github.com/mebbjk/hali-katalogu.git"
   },
   "dependencies": {
     "@google/genai": "^1.27.0",
