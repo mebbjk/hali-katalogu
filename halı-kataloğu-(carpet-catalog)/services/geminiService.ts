@@ -61,7 +61,7 @@ The JSON object must follow this schema:`;
       }
   });
 
-  const text = result.text.trim();
+  const text = (result.text ?? '').trim();
   try {
     return JSON.parse(text);
   } catch (e) {
@@ -119,7 +119,7 @@ ${JSON.stringify(candidateCarpets)}
         }
     });
 
-    const matchText = matchResult.text.trim();
+    const matchText = (matchResult.text ?? '').trim();
     try {
         const result = JSON.parse(matchText);
         const bestMatchId = result.best_match_id;
