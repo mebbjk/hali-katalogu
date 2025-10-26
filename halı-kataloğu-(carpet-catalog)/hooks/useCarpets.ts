@@ -5,6 +5,16 @@ import { extractCarpetDetails, findMatchingCarpet } from '../services/geminiServ
 
 const STORAGE_KEY = 'carpet_catalog_data';
 
+// Helper to convert a file to a Base64 data URL for persistent storage
+const fileToDataUrl = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = (error) => reject(error);
+    reader.readAsDataURL(file);
+  });
+};
+
 export const useCarpets = () => {
   const [carpets, setCarpets] = useState<Carpet[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,9 +50,8 @@ export const useCarpets = () => {
   }, [carpets, loading]);
   
   const addCarpet = useCallback(async (carpetData: Partial<Carpet>, imageFile: File): Promise<Carpet> => {
-    // Note: This app uses blob URLs which are temporary. For a production app,
-    // you would upload the image to a server or store it as base64 in a more robust storage.
-    const imageUrl = URL.createObjectURL(imageFile);
+    // Convert image to a persistent data URL (Base64) instead of a temporary blob URL.
+    const imageUrl = await fileToDataUrl(imageFile);
     const newCarpet: Carpet = {
       id: uuidv4(),
       imageUrl: imageUrl,
@@ -70,13 +79,8 @@ export const useCarpets = () => {
   }, []);
 
   const deleteCarpet = useCallback((carpetId: string) => {
-    setCarpets(prev => {
-      const carpetToDelete = prev.find(c => c.id === carpetId);
-      if (carpetToDelete?.imageUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(carpetToDelete.imageUrl);
-      }
-      return prev.filter(c => c.id !== carpetId)
-    });
+    // No need to revoke blob URLs anymore as we are using data URLs.
+    setCarpets(prev => prev.filter(c => c.id !== carpetId));
   }, []);
 
   const toggleFavorite = useCallback((carpetId: string) => {
@@ -88,17 +92,12 @@ export const useCarpets = () => {
   const replaceAllCarpets = useCallback((newCarpets: Carpet[]) => {
     // A simple validation to ensure we're not setting nonsense data.
     if (Array.isArray(newCarpets)) {
-        // Revoke old blob URLs before replacing
-        carpets.forEach(carpet => {
-            if (carpet.imageUrl.startsWith('blob:')) {
-                URL.revokeObjectURL(carpet.imageUrl);
-            }
-        });
+        // No need to revoke old blob URLs.
         setCarpets(newCarpets);
     } else {
         console.error("Import failed: provided data is not an array.");
     }
-  }, [carpets]);
+  }, []);
 
 
   // AI-powered functions
