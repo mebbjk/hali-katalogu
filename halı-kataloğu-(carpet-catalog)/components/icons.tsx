@@ -74,6 +74,21 @@ export const ArrowUpTrayIcon = createIcon(
   React.createElement('path', { strokeLinecap: "round", strokeLinejoin: "round", d: "M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" })
 );
 
+export const CheckCircleIcon = createIcon(
+  React.createElement(React.Fragment, null,
+    React.createElement('path', { strokeLinecap: "round", strokeLinejoin: "round", d: "M9 12.75 11.25 15 15 9.75" }),
+    React.createElement('path', { strokeLinecap: "round", strokeLinejoin: "round", d: "M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z", fill: "currentColor", className: "text-green-100 dark:text-green-900", strokeWidth: 0 }),
+    React.createElement('path', { strokeLinecap: "round", strokeLinejoin: "round", d: "M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" })
+  )
+);
+
+export const XCircleIcon = createIcon(
+  React.createElement(React.Fragment, null,
+    React.createElement('path', { strokeLinecap: "round", strokeLinejoin: "round", d: "m9.75 9.75 4.5 4.5m0-4.5-4.5 4.5" }),
+    React.createElement('path', { strokeLinecap: "round", strokeLinejoin: "round", d: "M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z", fill: "currentColor", className: "text-red-100 dark:text-red-900", strokeWidth: 0 }),
+    React.createElement('path', { strokeLinecap: "round", strokeLinejoin: "round", d: "M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" })
+  )
+);
 
 export const Spinner: React.FC<IconProps> = (props) => 
   React.createElement('svg', {

@@ -1,14 +1,31 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useCarpets } from './hooks/useCarpets';
 import { useSettings } from './hooks/useSettings';
-// FIX: Removed unused import for `initializeAi` as API key management is now handled by environment variables.
-// import { initializeAi } from './services/geminiService';
+import { useToast } from './hooks/useToast';
 import type { Carpet } from './types';
 import {
-  HomeIcon, PlusIcon, SearchIcon, HeartIcon, Cog6ToothIcon, CameraIcon, WandSparkles, Spinner, XMarkIcon, TrashIcon, ArrowUpTrayIcon, ArrowDownTrayIcon, BarcodeIcon, QrCodeIcon
+  HomeIcon, PlusIcon, SearchIcon, HeartIcon, Cog6ToothIcon, CameraIcon, WandSparkles, Spinner, XMarkIcon, TrashIcon, ArrowUpTrayIcon, ArrowDownTrayIcon, BarcodeIcon, QrCodeIcon, CheckCircleIcon, XCircleIcon
 } from './components/icons';
 
 const e = React.createElement;
+
+// --- Utility for Haptic Feedback ---
+const triggerHapticFeedback = (impact: 'light' | 'medium' | 'heavy' = 'light') => {
+    if (typeof window !== 'undefined' && 'vibrate' in navigator) {
+        const pattern: Record<typeof impact, number> = {
+            light: 20,
+            medium: 40,
+            heavy: 60
+        };
+        try {
+            navigator.vibrate(pattern[impact]);
+        } catch (e) {
+            // This can fail on some browsers if called too frequently.
+            // We can safely ignore the error.
+        }
+    }
+};
 
 // --- Constants for Dropdowns ---
 const STANDARD_CARPET_SIZES = [
@@ -55,6 +72,7 @@ const BarcodeScannerModal = ({ onScanSuccess, onClose, scanType }: { onScanSucce
                     if (videoRef.current && videoRef.current.readyState === 4) {
                         const barcodes = await barcodeDetector.detect(videoRef.current);
                         if (barcodes.length > 0) {
+                            triggerHapticFeedback('medium');
                             onScanSuccess(barcodes[0].rawValue);
                         } else {
                             animationFrameId = requestAnimationFrame(detect);
@@ -82,8 +100,6 @@ const BarcodeScannerModal = ({ onScanSuccess, onClose, scanType }: { onScanSucce
     }, [onScanSuccess, scanType]);
     
     return e('div', { className: 'fixed inset-0 z-[100] bg-black/80 flex flex-col items-center justify-center', onClick: onClose },
-        // FIX: Using an untyped event parameter with the `e` alias for `React.createElement` can confuse TypeScript's type overload resolution.
-        // Explicitly typing the event parameter `evt` as `React.MouseEvent` resolves the ambiguity.
         e('div', { className: 'relative w-full max-w-md bg-slate-900 rounded-lg p-4', onClick: (evt: React.MouseEvent) => evt.stopPropagation() },
             e('video', { ref: videoRef, className: 'w-full rounded-md', autoPlay: true, playsInline: true, muted: true }),
             error && e('p', { className: 'text-red-500 text-center mt-2' }, error),
@@ -106,7 +122,7 @@ const Header = ({ title, searchQuery, setSearchQuery, currentView }: { title: st
     'settings': t('settings'),
   };
 
-  return e('header', { className: 'sticky top-0 z-10 bg-slate-100/80 dark:bg-slate-800/80 backdrop-blur-sm p-4 border-b border-slate-200 dark:border-slate-700' },
+  return e('header', { className: 'sticky top-0 z-30 bg-slate-100/80 dark:bg-slate-800/80 backdrop-blur-sm p-4 border-b border-slate-200 dark:border-slate-700' },
     e('h1', { className: 'text-2xl font-bold text-center mb-4' }, viewTitles[currentView] || title),
     showSearch && e('div', { className: 'relative' },
       e('input', {
@@ -131,6 +147,11 @@ const BottomNav = ({ currentView, setCurrentView }: { currentView: string, setCu
     { id: 'settings', icon: Cog6ToothIcon, label: t('settings') },
   ];
 
+  const handleNavClick = (view: string) => {
+    triggerHapticFeedback();
+    setCurrentView(view);
+  };
+
   return e('nav', { className: 'fixed bottom-0 left-0 right-0 max-w-2xl mx-auto bg-slate-100 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700' },
     e('div', { className: 'flex justify-around items-center h-16' },
       ...navItems.map(item => {
@@ -138,7 +159,7 @@ const BottomNav = ({ currentView, setCurrentView }: { currentView: string, setCu
           return e('div', { key: 'add-wrapper', className: 'relative -mt-8' },
             e('button', {
               key: item.id,
-              onClick: () => setCurrentView(item.id),
+              onClick: () => handleNavClick(item.id),
               'aria-label': item.label,
               className: `w-16 h-16 flex items-center justify-center rounded-full bg-blue-600 text-white shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-slate-800 transition-transform hover:scale-110`,
             },
@@ -148,7 +169,7 @@ const BottomNav = ({ currentView, setCurrentView }: { currentView: string, setCu
         }
         return e('button', {
           key: item.id,
-          onClick: () => setCurrentView(item.id),
+          onClick: () => handleNavClick(item.id),
           className: `flex flex-col items-center justify-center w-full py-2 px-1 text-xs ${currentView === item.id ? 'text-blue-500' : 'text-slate-500 dark:text-slate-400'}`,
         },
           e(item.icon, { className: 'h-6 w-6 mb-1' }),
@@ -160,9 +181,12 @@ const BottomNav = ({ currentView, setCurrentView }: { currentView: string, setCu
 };
 
 const CarpetCard = ({ carpet, onCarpetClick }: { carpet: Carpet, onCarpetClick: (c: Carpet) => void }) => {
-    return e('div', { 
-        className: 'bg-white dark:bg-slate-800 rounded-lg shadow-md overflow-hidden cursor-pointer transition-transform hover:scale-105 relative',
+    return e(motion.div, { 
+        className: 'bg-white dark:bg-slate-800 rounded-lg shadow-md overflow-hidden cursor-pointer relative',
         onClick: () => onCarpetClick(carpet),
+        whileHover: { scale: 1.05 },
+        whileTap: { scale: 0.95 },
+        layout: true,
     },
         e('img', { src: carpet.imageUrl, alt: carpet.name, className: 'w-full h-40 object-cover' }),
         e('div', { className: 'p-3' },
@@ -183,7 +207,9 @@ const CarpetGrid = ({ carpets, onCarpetClick, isFavorites = false }: { carpets: 
     }
     
     return e('div', { className: 'grid grid-cols-2 md:grid-cols-3 gap-4' },
-        ...carpets.map(carpet => e(CarpetCard, { key: carpet.id, carpet, onCarpetClick }))
+        e(AnimatePresence, null, 
+          ...carpets.map(carpet => e(CarpetCard, { key: carpet.id, carpet, onCarpetClick }))
+        )
     );
 };
 
@@ -230,8 +256,6 @@ const ImageUploader = ({ onImageSelect, currentImageUrl }: { onImageSelect: (fil
     );
 };
 
-// FIX: Relaxed the `onChange` prop's type to `any` to resolve TypeScript build errors.
-// This is a pragmatic fix for `React.createElement`'s stricter type checking with DOM elements.
 const FormInput = ({ label, name, value, onChange, placeholder = '', type = 'text', required = false }: { label: string, name: string, value: any, onChange: any, placeholder?: string, type?: string, required?: boolean }) => {
     const { t } = useSettings();
     const InputComponent = type === 'textarea' ? 'textarea' : 'input';
@@ -260,6 +284,7 @@ const MultiTagInput = ({ label, values, onValuesChange, placeholder, options }: 
     const handleAdd = () => {
         const valueToAdd = inputValue.trim();
         if (valueToAdd && !values.includes(valueToAdd)) {
+            triggerHapticFeedback();
             onValuesChange([...values, valueToAdd]);
             setInputValue(''); // Reset for next input
         }
@@ -321,25 +346,29 @@ const MultiTagInput = ({ label, values, onValuesChange, placeholder, options }: 
 };
 
 
-// FIX: Per React.createElement conventions and TypeScript, component props with children should mark `children` as optional in the type definition to avoid type errors at the call site.
 const Modal = ({ isOpen, onClose, children }: { isOpen: boolean, onClose: () => void, children?: React.ReactNode }) => {
-    if (!isOpen) return null;
-
-    return e('div', {
-        className: 'fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4',
-        onClick: onClose,
-    },
-        e('div', {
-            className: 'bg-slate-100 dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto',
-            onClick: (evt: React.MouseEvent) => evt.stopPropagation(),
-        }, children)
+    return e(AnimatePresence, null,
+        isOpen && e(motion.div, {
+            className: 'fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4',
+            initial: { opacity: 0 },
+            animate: { opacity: 1 },
+            exit: { opacity: 0 },
+            onClick: onClose,
+        },
+            e(motion.div, {
+                className: 'bg-slate-100 dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto',
+                initial: { scale: 0.9, opacity: 0 },
+                animate: { scale: 1, opacity: 1 },
+                exit: { scale: 0.9, opacity: 0 },
+                transition: { type: 'spring', stiffness: 300, damping: 30 },
+                onClick: (evt: React.MouseEvent) => evt.stopPropagation(),
+            }, children)
+        )
     );
 };
 
-// FIX: Removed `showApiKeyLink` prop and related logic as API key is now handled by environment variables.
 const InfoModal = ({ title, message, isOpen, onClose }: { title: string, message: string, isOpen: boolean, onClose: () => void }) => {
     const { t } = useSettings();
-    if (!isOpen) return null;
 
     return e(Modal, { isOpen: isOpen, onClose: onClose },
         e('div', { className: 'p-6' },
@@ -366,7 +395,9 @@ const CarpetDetailModal = ({ carpet, onClose, onUpdate, onDelete, onToggleFavori
         setIsEditing(false); // Reset edit mode when a new carpet is selected
     }, [carpet]);
 
-    if (!carpet || !editedCarpet) return null;
+    if (!carpet) return null;
+    const currentCarpet = editedCarpet || carpet;
+
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
@@ -375,16 +406,22 @@ const CarpetDetailModal = ({ carpet, onClose, onUpdate, onDelete, onToggleFavori
 
     const handleSave = () => {
         if (editedCarpet) {
+            triggerHapticFeedback('medium');
             onUpdate(editedCarpet);
             setIsEditing(false);
         }
     };
     
     const handleDelete = () => {
-        // eslint-disable-next-line no-alert
         if (window.confirm(t('delete_carpet_confirm'))) {
+            triggerHapticFeedback('heavy');
             onDelete(carpet.id);
         }
+    };
+
+    const handleToggleFavorite = () => {
+        triggerHapticFeedback();
+        onToggleFavorite(carpet.id);
     };
 
     const renderDetail = (label: string, value?: string | number | string[]) => {
@@ -422,25 +459,25 @@ const CarpetDetailModal = ({ carpet, onClose, onUpdate, onDelete, onToggleFavori
         { name: 'description', label: t('description'), type: 'textarea' },
     ];
 
-    return e(Modal, { isOpen: true, onClose },
+    return e(Modal, { isOpen: !!carpet, onClose },
         e('div', { className: 'relative' },
             e('img', { src: carpet.imageUrl, alt: carpet.name, className: 'w-full h-64 object-cover' }),
             e('button', { onClick: onClose, className: 'absolute top-3 right-3 p-2 bg-black/50 rounded-full' }, e(XMarkIcon, { className: 'h-6 w-6 text-white' })),
             e('div', { className: 'p-6' },
                 e('div', { className: 'flex justify-between items-start mb-4' },
                     isEditing ?
-                        e(FormInput, { label: t('name'), name: 'name', value: editedCarpet.name, onChange: handleChange, required: true }) :
+                        e(FormInput, { label: t('name'), name: 'name', value: currentCarpet.name, onChange: handleChange, required: true }) :
                         e('h2', { className: 'text-2xl font-bold' }, carpet.name),
-                    e('button', { onClick: () => onToggleFavorite(carpet.id) }, 
+                    e('button', { onClick: handleToggleFavorite }, 
                         e(HeartIcon, { className: `h-8 w-8 transition-colors ${carpet.isFavorite ? 'text-red-500' : 'text-slate-400'}`, fill: carpet.isFavorite ? 'currentColor' : 'none' })
                     )
                 ),
                 isEditing ? (
                     e('div', null, 
-                        ...editFields.map(f => e(FormInput, { key: f.name, ...f, value: editedCarpet[f.name as keyof Carpet], onChange: handleChange })),
+                        ...editFields.map(f => e(FormInput, { key: f.name, ...f, value: currentCarpet[f.name as keyof Carpet], onChange: handleChange })),
                         e(MultiTagInput, {
                             label: t('sizes'),
-                            values: editedCarpet.size,
+                            values: currentCarpet.size,
                             onValuesChange: (newSizes: string[]) => setEditedCarpet(prev => prev ? { ...prev, size: newSizes } : null),
                             placeholder: t('enter_custom_size'),
                         }),
@@ -448,7 +485,7 @@ const CarpetDetailModal = ({ carpet, onClose, onUpdate, onDelete, onToggleFavori
                             ...STANDARD_CARPET_SIZES.map(s => e('button', {
                                 type: 'button',
                                 onClick: () => {
-                                    if (!editedCarpet.size.includes(s)) {
+                                    if (!currentCarpet.size.includes(s)) {
                                         setEditedCarpet(prev => prev ? { ...prev, size: [...prev.size, s] } : null);
                                     }
                                 },
@@ -457,7 +494,7 @@ const CarpetDetailModal = ({ carpet, onClose, onUpdate, onDelete, onToggleFavori
                         ),
                          e(MultiTagInput, {
                             label: t('yarn_types'),
-                            values: editedCarpet.yarnType,
+                            values: currentCarpet.yarnType,
                             onValuesChange: (newYarns: string[]) => setEditedCarpet(prev => prev ? { ...prev, yarnType: newYarns } : null),
                             placeholder: t('select_yarn_type'),
                             options: STANDARD_YARN_TYPES
@@ -504,7 +541,6 @@ const AddCarpetView = ({ onCarpetAdded }: { onCarpetAdded: () => void }) => {
     const [error, setError] = useState('');
     const [isBarcodeScannerOpen, setIsBarcodeScannerOpen] = useState(false);
     const [barcodeScanType, setBarcodeScanType] = useState<'barcode' | 'qr_code'>('barcode');
-    // FIX: Removed `isApiError` from state as it's no longer needed after API key handling refactor.
     const [infoModal, setInfoModal] = useState<{ isOpen: boolean; title: string; message: string; }>({ isOpen: false, title: '', message: '' });
 
 
@@ -527,7 +563,6 @@ const AddCarpetView = ({ onCarpetAdded }: { onCarpetAdded: () => void }) => {
         try {
             const details = await getDetailsFromImage(imageFile);
             setCarpetData(prev => ({ ...prev, ...details }));
-        // FIX: Updated error handling to show a generic AI error message, reflecting the new API key management strategy.
         } catch (err: any) {
             console.error("AI Scan Error:", err);
             setInfoModal({
@@ -663,7 +698,6 @@ const MatchCarpetView = () => {
     const [result, setResult] = useState<'found' | 'not_found' | null>(null);
     const [matchedCarpet, setMatchedCarpet] = useState<Carpet | null>(null);
     const [detailModalCarpet, setDetailModalCarpet] = useState<Carpet | null>(null);
-    // FIX: Removed `isApiError` from state as it's no longer needed after API key handling refactor.
     const [infoModal, setInfoModal] = useState<{ isOpen: boolean; title: string; message: string; }>({ isOpen: false, title: '', message: '' });
 
 
@@ -686,7 +720,6 @@ const MatchCarpetView = () => {
             } else {
                 setResult('not_found');
             }
-        // FIX: Updated error handling to show a generic AI error message, reflecting the new API key management strategy.
         } catch (err: any) {
              setInfoModal({
                 isOpen: true,
@@ -745,9 +778,9 @@ const MatchCarpetView = () => {
 };
 
 const SettingsView = () => {
-    // FIX: Removed `apiKey` and `setApiKey` as they are no longer managed through settings.
     const { language, setLanguage, theme, setTheme, t } = useSettings();
     const { carpets, replaceAllCarpets } = useCarpets();
+    const toast = useToast();
     const importInputRef = useRef<HTMLInputElement>(null);
 
     const handleExport = () => {
@@ -761,9 +794,10 @@ const SettingsView = () => {
             linkElement.setAttribute('href', dataUri);
             linkElement.setAttribute('download', exportFileDefaultName);
             linkElement.click();
+            toast.addToast(t('export_success'), 'success');
         } catch (err) {
             console.error("Export failed", err);
-            alert(t('export_error'));
+            toast.addToast(t('export_error'), 'error');
         }
     };
     
@@ -778,23 +812,21 @@ const SettingsView = () => {
                 if (typeof text !== 'string') throw new Error("File could not be read");
                 const importedCarpets = JSON.parse(text);
                 await replaceAllCarpets(importedCarpets);
-                alert(t('import_success'));
+                toast.addToast(t('import_success'), 'success');
             } catch (err) {
                 console.error("Import failed", err);
-                alert(t('import_error'));
+                toast.addToast(t('import_error'), 'error');
             }
         };
         reader.readAsText(file);
     };
 
-    // FIX: Per React.createElement conventions and TypeScript, component props with children should mark `children` as optional in the type definition to avoid type errors at the call site.
     const SettingsSection = ({ title, children }: { title: string, children?: React.ReactNode }) =>
         e('div', { className: 'mb-6' },
             e('h3', { className: 'text-lg font-semibold border-b border-slate-300 dark:border-slate-600 pb-2 mb-3' }, title),
             children
         );
         
-    // FIX: Per React.createElement conventions and TypeScript, component props with children should mark `children` as optional in the type definition to avoid type errors at the call site.
     const SettingsItem = ({ label, children }: { label: string, children?: React.ReactNode }) =>
         e('div', { className: 'flex items-center justify-between py-2' },
             e('label', { className: 'text-md' }, label),
@@ -828,7 +860,6 @@ const SettingsView = () => {
                 )
             )
         ),
-        // FIX: Removed the API Key configuration section from the UI to align with security best practices.
         e(SettingsSection, { title: t('data_management') },
             e('div', { className: 'flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4' },
                 e('input', { ref: importInputRef, type: 'file', accept: '.json', className: 'hidden', onChange: handleImport }),
@@ -845,16 +876,48 @@ const SettingsView = () => {
     );
 };
 
+const Toast = ({ message, type, onRemove }: { message: string, type: 'success' | 'error', onRemove: () => void }) => {
+    const isSuccess = type === 'success';
+    const Icon = isSuccess ? CheckCircleIcon : XCircleIcon;
+
+    useEffect(() => {
+        const timer = setTimeout(onRemove, 3000);
+        return () => clearTimeout(timer);
+    }, [onRemove]);
+    
+    return e(motion.div, {
+        className: `flex items-center w-full max-w-sm p-4 rounded-lg shadow-lg text-white ${isSuccess ? 'bg-green-500' : 'bg-red-500'}`,
+        layout: true,
+        initial: { opacity: 0, y: -50, scale: 0.3 },
+        animate: { opacity: 1, y: 0, scale: 1 },
+        exit: { opacity: 0, scale: 0.5, transition: { duration: 0.2 } },
+    },
+        e(Icon, { className: 'h-6 w-6' }),
+        e('div', { className: 'ml-3 text-sm font-medium' }, message),
+        e('button', { onClick: onRemove, className: 'ml-auto -mx-1.5 -my-1.5 p-1.5 rounded-full inline-flex hover:bg-white/20' }, e(XMarkIcon, { className: 'h-5 w-5' }))
+    );
+};
+
+const ToastContainer = () => {
+    const { toasts, removeToast } = useToast();
+    return e('div', { className: 'fixed top-5 left-1/2 -translate-x-1/2 z-[200] w-full max-w-sm flex flex-col items-center space-y-2' },
+        e(AnimatePresence, null, 
+            ...toasts.map(toast => e(Toast, {
+                key: toast.id,
+                ...toast,
+                onRemove: () => removeToast(toast.id)
+            }))
+        )
+    );
+};
+
 function App() {
   const { carpets, loading, error: dbError, toggleFavorite, updateCarpet, deleteCarpet } = useCarpets();
-  // FIX: Removed `apiKey` from settings context as it's no longer needed.
   const { t } = useSettings();
   const [currentView, setCurrentView] = useState('home');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCarpet, setSelectedCarpet] = useState<Carpet | null>(null);
 
-  // FIX: Removed useEffect for `initializeAi` as API key is now handled via environment variables.
-  
   const handleCarpetClick = (carpet: Carpet) => {
     setSelectedCarpet(carpet);
   };
@@ -875,6 +938,18 @@ function App() {
   }, [searchQuery, carpets]);
 
   const favoriteCarpets = useMemo(() => filteredCarpets.filter(c => c.isFavorite), [filteredCarpets]);
+
+  const pageVariants = {
+    initial: { opacity: 0, x: 50 },
+    in: { opacity: 1, x: 0 },
+    out: { opacity: 0, x: -50 },
+  };
+
+  const pageTransition = {
+    type: "tween",
+    ease: "anticipate",
+    duration: 0.4
+  };
 
   const renderContent = () => {
     if (loading) return e('div', { className: 'flex justify-center items-center h-64' }, e(Spinner, { className: 'h-8 w-8 animate-spin' }));
@@ -898,9 +973,21 @@ function App() {
 
   return e('div', { className: 'min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100' },
     e(Header, { title: t('app_title'), searchQuery, setSearchQuery, currentView }),
-    e('main', { className: 'p-4 pb-24 max-w-2xl mx-auto' }, renderContent()),
+    e(ToastContainer, null),
+    e('main', { className: 'p-4 pb-24 max-w-2xl mx-auto overflow-hidden' }, 
+        e(AnimatePresence, { mode: 'wait' }, 
+            e(motion.div, {
+                key: currentView,
+                initial: "initial",
+                animate: "in",
+                exit: "out",
+                variants: pageVariants,
+                transition: pageTransition,
+            }, renderContent())
+        )
+    ),
     e(BottomNav, { currentView, setCurrentView }),
-    selectedCarpet && e(CarpetDetailModal, { 
+    e(CarpetDetailModal, { 
       carpet: selectedCarpet,
       onClose: handleCloseModal,
       onUpdate: (c: Carpet) => {
@@ -911,7 +998,6 @@ function App() {
           deleteCarpet(id);
           handleCloseModal();
       },
-      // FIX: Corrected prop passing to use the `toggleFavorite` function from the `useCarpets` hook.
       onToggleFavorite: toggleFavorite
     })
   );
