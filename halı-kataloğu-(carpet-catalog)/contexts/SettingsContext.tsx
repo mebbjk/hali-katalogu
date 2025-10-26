@@ -10,6 +10,7 @@ declare global {
   }
 }
 
+// FIX: Removed `apiKey` and `setApiKey` from the context type as API key management is now handled via environment variables.
 interface SettingsContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
@@ -43,6 +44,9 @@ export const SettingsProvider: React.FC<SettingsProviderProps> = ({ children }) 
     }
     return 'light';
   });
+  
+  // FIX: Removed `apiKey` state management as it is no longer needed.
+
 
   useEffect(() => {
     try {
@@ -65,11 +69,15 @@ export const SettingsProvider: React.FC<SettingsProviderProps> = ({ children }) 
     }
   }, [theme]);
 
+  // FIX: Removed useEffect for saving API key to localStorage.
+
+
   const t = (key: string): string => {
     return translations[language][key] || key;
   };
 
   return (
+    // FIX: Removed `apiKey` and `setApiKey` from the provider value.
     <SettingsContext.Provider value={{ language, setLanguage, theme, setTheme, t }}>
       {children}
     </SettingsContext.Provider>

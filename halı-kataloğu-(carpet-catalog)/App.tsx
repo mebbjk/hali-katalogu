@@ -1,6 +1,8 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useCarpets } from './hooks/useCarpets';
 import { useSettings } from './hooks/useSettings';
+// FIX: Removed unused import for `initializeAi` as API key management is now handled by environment variables.
+// import { initializeAi } from './services/geminiService';
 import type { Carpet } from './types';
 import {
   HomeIcon, PlusIcon, SearchIcon, HeartIcon, Cog6ToothIcon, CameraIcon, WandSparkles, Spinner, XMarkIcon, TrashIcon, ArrowUpTrayIcon, ArrowDownTrayIcon, BarcodeIcon, QrCodeIcon
@@ -211,579 +213,664 @@ const ImageUploader = ({ onImageSelect, currentImageUrl }: { onImageSelect: (fil
 
     return e('div', { className: 'mt-4' },
         e('label', { className: 'block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2' }, t('carpet_image')),
-        e('div', { 
-            className: 'w-full h-48 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-md flex items-center justify-center text-center cursor-pointer',
+        e('div', {
+            className: `mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-slate-300 dark:border-slate-600 border-dashed rounded-md ${previewUrl ? 'h-48' : ''}`,
             onClick: () => fileInputRef.current?.click(),
             onDrop: handleDrop,
             onDragOver: (e: React.DragEvent) => e.preventDefault(),
         },
-            previewUrl 
-                ? e('img', { src: previewUrl, className: 'h-full w-full object-contain' })
-                : e('div', { className: 'text-slate-500' }, 
-                    e(CameraIcon, { className: 'h-12 w-12 mx-auto mb-2' }),
-                    t('drop_image_here')
-                ),
-            e('input', { type: 'file', ref: fileInputRef, onChange: handleFileChange, accept: "image/*", className: 'hidden' })
+            e('input', { ref: fileInputRef, type: 'file', accept: 'image/*', className: 'hidden', onChange: handleFileChange }),
+            previewUrl ? 
+                e('img', { src: previewUrl, alt: 'Carpet preview', className: 'h-full object-contain' }) :
+                e('div', { className: 'space-y-1 text-center' },
+                    e(CameraIcon, { className: 'mx-auto h-12 w-12 text-slate-400' }),
+                    e('p', { className: 'text-sm text-slate-600 dark:text-slate-400' }, t('drop_image_here'))
+                )
         )
     );
 };
 
-const AddCarpetView = ({ addCarpet, getDetailsFromImage, onFinished, setInfoModal }: { addCarpet: (data: Partial<Carpet>, file: File) => Promise<Carpet>, getDetailsFromImage: (file: File) => Promise<Partial<Carpet>>, onFinished: () => void, setInfoModal: (info: { title: string, message: string } | null) => void }) => {
+const FormInput = ({ label, name, value, onChange, placeholder = '', type = 'text', required = false }: { label: string, name: string, value: any, onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void, placeholder?: string, type?: string, required?: boolean }) => {
     const { t } = useSettings();
-    const [imageFile, setImageFile] = useState<File | null>(null);
-    const [details, setDetails] = useState<Partial<Carpet>>({});
-    const [isAnalyzing, setIsAnalyzing] = useState(false);
-    const [error, setError] = useState('');
-    const [isScannerOpen, setIsScannerOpen] = useState(false);
-    const [scanTarget, setScanTarget] = useState<'barcode' | 'qr_code' | null>(null);
+    const InputComponent = type === 'textarea' ? 'textarea' : 'input';
 
-
-    const handleImageSelect = (file: File) => {
-        setImageFile(file);
-    };
-    
-    const handleAnalyze = async () => {
-        if (!imageFile) return;
-        setIsAnalyzing(true);
-        setError('');
-        try {
-            const extractedDetails = await getDetailsFromImage(imageFile);
-            setDetails(prev => ({...prev, ...extractedDetails}));
-        } catch (e: any) {
-            if (e.message.includes("API_KEY")) {
-                setInfoModal({ 
-                    title: 'api_key_missing_title', 
-                    message: 'api_key_missing_message'
-                });
-            } else {
-                setError(e.message || t('ai_analysis_error'));
-            }
-        } finally {
-            setIsAnalyzing(false);
-        }
-    };
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!imageFile) {
-            setError(t('required_field'));
-            return;
-        }
-        await addCarpet(details, imageFile);
-        onFinished();
-    };
-    
-    const handleInputChange = (field: keyof Carpet, value: string | number) => {
-        setDetails(prev => ({...prev, [field]: value}));
-    };
-    
-    const handleScanSuccess = (value: string) => {
-        if (scanTarget) {
-            const field = scanTarget === 'barcode' ? 'barcodeId' : 'qrCodeId';
-            handleInputChange(field, value);
-        }
-        setIsScannerOpen(false);
-        setScanTarget(null);
-    };
-
-    const formFields = [
-        { id: 'name', label: t('name'), type: 'text' },
-        { id: 'brand', label: t('brand'), type: 'text' },
-        { id: 'model', label: t('model'), type: 'text' },
-        { id: 'price', label: t('price'), type: 'number' },
-        { id: 'pattern', label: t('pattern'), type: 'text' },
-        { id: 'texture', label: t('texture'), type: 'text' },
-        { id: 'type', label: t('type'), type: 'text' },
-    ];
-    
-    const isCustomSize = details.size ? !STANDARD_CARPET_SIZES.includes(details.size) : false;
-    const sizeSelectValue = isCustomSize ? 'Other' : details.size || '';
-
-    return e(React.Fragment, null, 
-        e('form', { onSubmit: handleSubmit, className: 'space-y-4' },
-            e(ImageUploader, { onImageSelect: handleImageSelect }),
-            imageFile && e('button', {
-                type: 'button',
-                onClick: handleAnalyze,
-                disabled: isAnalyzing,
-                className: 'w-full flex items-center justify-center gap-2 p-2 rounded-md bg-purple-600 text-white hover:bg-purple-700 disabled:bg-purple-300'
-            }, 
-                isAnalyzing ? e(Spinner, { className: 'h-5 w-5 animate-spin'}) : e(WandSparkles, { className: 'h-5 w-5' }),
-                isAnalyzing ? t('analyzing_image') : t('scan_with_ai')
-            ),
-            error && e('p', { className: 'text-red-500 text-sm' }, error),
-            
-            ...formFields.map(field => e('div', { key: field.id },
-                e('label', { htmlFor: field.id, className: 'block text-sm font-medium' }, field.label),
-                e('input', {
-                    id: field.id,
-                    type: field.type,
-                    value: details[field.id as keyof Carpet] as string || '',
-                    onChange: (ev: React.ChangeEvent<HTMLInputElement>) => handleInputChange(field.id as keyof Carpet, field.type === 'number' ? parseInt(ev.target.value) || 0 : ev.target.value),
-                    className: 'mt-1 w-full p-2 rounded-md bg-slate-200 dark:bg-slate-700 border border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500'
-                })
-            )),
-
-            // --- Custom Size Input ---
-            e('div', { key: 'size' },
-                e('label', { htmlFor: 'size-select', className: 'block text-sm font-medium' }, t('size')),
-                e('select', {
-                    id: 'size-select',
-                    value: sizeSelectValue,
-                    onChange: (ev: React.ChangeEvent<HTMLSelectElement>) => {
-                        const value = ev.target.value;
-                        handleInputChange('size', value !== 'Other' ? value : '');
-                    },
-                    className: 'mt-1 w-full p-2 rounded-md bg-slate-200 dark:bg-slate-700 border border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500'
-                },
-                    e('option', { value: '' }, t('select_one')),
-                    ...STANDARD_CARPET_SIZES.map(s => e('option', { key: s, value: s }, s)),
-                    e('option', { value: 'Other' }, t('other'))
-                ),
-                (sizeSelectValue === 'Other') && e('input', {
-                    type: 'text',
-                    placeholder: t('enter_custom_size'),
-                    value: details.size || '',
-                    onChange: (ev: React.ChangeEvent<HTMLInputElement>) => handleInputChange('size', ev.target.value),
-                    className: 'mt-2 w-full p-2 rounded-md bg-slate-200 dark:bg-slate-700 border border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500'
-                })
-            ),
-
-            // --- Yarn Type Dropdown ---
-            e('div', { key: 'yarnType' },
-                e('label', { htmlFor: 'yarnType', className: 'block text-sm font-medium' }, t('yarn_type')),
-                e('select', {
-                    id: 'yarnType',
-                    value: details.yarnType || '',
-                    onChange: (ev: React.ChangeEvent<HTMLSelectElement>) => handleInputChange('yarnType', ev.target.value),
-                    className: 'mt-1 w-full p-2 rounded-md bg-slate-200 dark:bg-slate-700 border border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500'
-                },
-                    e('option', { value: '' }, t('select_one')),
-                    ...STANDARD_YARN_TYPES.map(type => e('option', { key: type, value: type }, type)),
-                    e('option', { value: 'Other' }, t('other')),
-                    e('option', { value: 'Unknown' }, t('unknown'))
-                )
-            ),
-
-            e('div', { key: 'barcodeId' },
-                e('label', { htmlFor: 'barcodeId', className: 'block text-sm font-medium' }, t('barcode_id')),
-                e('div', { className: 'flex gap-2 mt-1' },
-                    e('input', {
-                        id: 'barcodeId',
-                        type: 'text',
-                        value: details.barcodeId || '',
-                        onChange: (ev: React.ChangeEvent<HTMLInputElement>) => handleInputChange('barcodeId', ev.target.value),
-                        className: 'flex-grow w-full p-2 rounded-md bg-slate-200 dark:bg-slate-700 border border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500'
-                    }),
-                    e('button', { type: 'button', onClick: () => { setScanTarget('barcode'); setIsScannerOpen(true); }, className: 'p-2 rounded-md bg-slate-200 dark:bg-slate-600' }, e(BarcodeIcon, { className: 'h-6 w-6' }))
-                )
-            ),
-
-            e('div', { key: 'qrCodeId' },
-                e('label', { htmlFor: 'qrCodeId', className: 'block text-sm font-medium' }, t('qr_code_id')),
-                e('div', { className: 'flex gap-2 mt-1' },
-                    e('input', {
-                        id: 'qrCodeId',
-                        type: 'text',
-                        value: details.qrCodeId || '',
-                        onChange: (ev: React.ChangeEvent<HTMLInputElement>) => handleInputChange('qrCodeId', ev.target.value),
-                        className: 'flex-grow w-full p-2 rounded-md bg-slate-200 dark:bg-slate-700 border border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500'
-                    }),
-                    e('button', { type: 'button', onClick: () => { setScanTarget('qr_code'); setIsScannerOpen(true); }, className: 'p-2 rounded-md bg-slate-200 dark:bg-slate-600' }, e(QrCodeIcon, { className: 'h-6 w-6' }))
-                )
-            ),
-            
-            e('div', {},
-                e('label', { htmlFor: 'description', className: 'block text-sm font-medium' }, t('description')),
-                e('textarea', {
-                    id: 'description',
-                    value: details.description || '',
-                    rows: 4,
-                    onChange: (ev: React.ChangeEvent<HTMLTextAreaElement>) => handleInputChange('description', ev.target.value),
-                    className: 'mt-1 w-full p-2 rounded-md bg-slate-200 dark:bg-slate-700 border border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500'
-                })
-            ),
-
-            e('button', {
-                type: 'submit',
-                className: 'w-full p-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-300',
-                disabled: !imageFile,
-            }, t('add_carpet'))
-        ),
-        isScannerOpen && scanTarget && e(BarcodeScannerModal, { 
-            onScanSuccess: handleScanSuccess, 
-            onClose: () => setIsScannerOpen(false), 
-            scanType: scanTarget 
-        })
+    return e('div', { className: 'mb-4' },
+        e('label', { htmlFor: name, className: 'block text-sm font-medium text-slate-700 dark:text-slate-300' }, `${label}${required ? ' *' : ''}`),
+        e(InputComponent, {
+            id: name,
+            name: name,
+            type: type,
+            value: value,
+            onChange: onChange,
+            placeholder: placeholder || label,
+            required: required,
+            rows: type === 'textarea' ? 4 : undefined,
+            className: `mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${type === 'textarea' ? 'min-h-[100px]' : ''}`,
+        }),
+        required && !value && e('p', { className: 'text-xs text-red-500 mt-1' }, t('required_field'))
     );
 };
 
-const MatchFinderView = ({ findMatchByImage, onMatchFound, setInfoModal }: { findMatchByImage: (file: File) => Promise<Carpet | null>, onMatchFound: (carpet: Carpet | null) => void, setInfoModal: (info: { title: string, message: string } | null) => void }) => {
+const FormSelect = ({ label, name, value, onChange, options, required = false }: { label: string, name: string, value: string, onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void, options: string[], required?: boolean }) => {
     const { t } = useSettings();
-    const [imageFile, setImageFile] = useState<File | null>(null);
-    const [isSearching, setIsSearching] = useState(false);
-    const [error, setError] = useState('');
-    const [match, setMatch] = useState<Carpet | 'not_found' | null>(null);
-
-    useEffect(() => {
-        // Clear previous result when a new image is selected
-        setMatch(null);
-    }, [imageFile]);
-    
-    const handleImageSelect = (file: File) => {
-        setImageFile(file);
-    };
-
-    const handleSearch = async () => {
-        if (!imageFile) return;
-        setIsSearching(true);
-        setError('');
-        setMatch(null);
-        try {
-            const foundMatch = await findMatchByImage(imageFile);
-            setMatch(foundMatch || 'not_found');
-        } catch (e: any) {
-             if (e.message.includes("API_KEY")) {
-                setInfoModal({ 
-                    title: 'api_key_missing_title', 
-                    message: 'api_key_missing_message'
-                });
-            } else {
-                setError(e.message || t('ai_match_error'));
-            }
-        } finally {
-            setIsSearching(false);
-        }
-    };
-    
-    return e('div', { className: 'space-y-4' },
-        e('p', { className: 'text-center text-slate-600 dark:text-slate-400' }, t('upload_image_to_find')),
-        e(ImageUploader, { onImageSelect: handleImageSelect }),
-        imageFile && e('button', {
-            type: 'button',
-            onClick: handleSearch,
-            disabled: isSearching,
-            className: 'w-full flex items-center justify-center gap-2 p-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-300'
-        }, 
-            isSearching ? e(Spinner, { className: 'h-5 w-5 animate-spin'}) : e(SearchIcon, { className: 'h-5 w-5' }),
-            isSearching ? t('searching_for_match') : t('find_match')
+    return e('div', { className: 'mb-4' },
+        e('label', { htmlFor: name, className: 'block text-sm font-medium text-slate-700 dark:text-slate-300' }, `${label}${required ? ' *' : ''}`),
+        e('select', {
+            id: name,
+            name: name,
+            value: value,
+            onChange: onChange,
+            required: required,
+            className: 'mt-1 block w-full pl-3 pr-10 py-2 text-base bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md',
+        },
+            e('option', { value: "", disabled: true }, t('select_one')),
+            ...options.map(opt => e('option', { key: opt, value: opt }, opt)),
+            e('option', { value: "Other" }, t('other'))
         ),
-        error && e('p', { className: 'text-red-500 text-sm' }, error),
-        
-        match && e('div', { className: 'mt-6' },
-            match === 'not_found' 
-            ? e('p', { className: 'text-center' }, t('no_match_found'))
-            : e(React.Fragment, null,
-                e('h3', { className: 'text-lg font-semibold mb-2 text-center' }, t('match_found')),
-                e(CarpetCard, { carpet: match, onCarpetClick: () => onMatchFound(match) })
+        required && !value && e('p', { className: 'text-xs text-red-500 mt-1' }, t('required_field'))
+    );
+};
+
+
+// FIX: Per React.createElement conventions and TypeScript, component props with children should mark `children` as optional in the type definition to avoid type errors at the call site.
+const Modal = ({ isOpen, onClose, children }: { isOpen: boolean, onClose: () => void, children?: React.ReactNode }) => {
+    if (!isOpen) return null;
+
+    return e('div', {
+        className: 'fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4',
+        onClick: onClose,
+    },
+        e('div', {
+            className: 'bg-slate-100 dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto',
+            onClick: (evt: React.MouseEvent) => evt.stopPropagation(),
+        }, children)
+    );
+};
+
+// FIX: Removed `showApiKeyLink` prop and related logic as API key is now handled by environment variables.
+const InfoModal = ({ title, message, isOpen, onClose }: { title: string, message: string, isOpen: boolean, onClose: () => void }) => {
+    const { t } = useSettings();
+    if (!isOpen) return null;
+
+    return e(Modal, { isOpen: isOpen, onClose: onClose },
+        e('div', { className: 'p-6' },
+            e('h2', { className: 'text-xl font-bold mb-4' }, title),
+            e('p', { className: 'mb-6' }, message),
+            e('div', { className: 'flex justify-end space-x-4' },
+                e('button', {
+                    onClick: onClose,
+                    className: 'px-4 py-2 rounded-md bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500'
+                }, t('ok'))
             )
         )
     );
 };
 
 
-const SettingsView = ({ replaceAllCarpets }: { replaceAllCarpets: (carpets: Carpet[]) => void }) => {
+const CarpetDetailModal = ({ carpet, onClose, onUpdate, onDelete, onToggleFavorite }: { carpet: Carpet | null, onClose: () => void, onUpdate: (c: Carpet) => void, onDelete: (id: string) => void, onToggleFavorite: (id: string) => void }) => {
+    const { t } = useSettings();
+    const [isEditing, setIsEditing] = useState(false);
+    const [editedCarpet, setEditedCarpet] = useState<Carpet | null>(carpet);
+
+    useEffect(() => {
+        setEditedCarpet(carpet);
+        setIsEditing(false); // Reset edit mode when a new carpet is selected
+    }, [carpet]);
+
+    if (!carpet || !editedCarpet) return null;
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+        const { name, value } = e.target;
+        setEditedCarpet(prev => prev ? { ...prev, [name]: name === 'price' ? Number(value) : value } : null);
+    };
+    
+    const handleSizeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const value = e.target.value;
+        setEditedCarpet(prev => prev ? { ...prev, size: value === "Other" ? "" : value } : null);
+    };
+    
+    const handleCustomSizeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setEditedCarpet(prev => prev ? { ...prev, size: e.target.value } : null);
+    };
+
+    const handleYarnChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const value = e.target.value;
+        setEditedCarpet(prev => prev ? { ...prev, yarnType: value === "Other" ? "" : value } : null);
+    };
+    
+    const handleCustomYarnChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setEditedCarpet(prev => prev ? { ...prev, yarnType: e.target.value } : null);
+    };
+
+
+    const handleSave = () => {
+        if (editedCarpet) {
+            onUpdate(editedCarpet);
+            setIsEditing(false);
+        }
+    };
+    
+    const handleDelete = () => {
+        // eslint-disable-next-line no-alert
+        if (window.confirm(t('delete_carpet_confirm'))) {
+            onDelete(carpet.id);
+        }
+    };
+
+    const isCustomSize = !STANDARD_CARPET_SIZES.includes(editedCarpet.size);
+    const isCustomYarn = !STANDARD_YARN_TYPES.includes(editedCarpet.yarnType);
+
+    const renderDetail = (label: string, value?: string | number) => e('div', { key: label, className: 'py-2' },
+        e('p', { className: 'text-sm font-medium text-slate-500' }, label),
+        e('p', { className: 'text-md text-slate-800 dark:text-slate-200' }, value || 'N/A')
+    );
+    
+    const detailFields = [
+        { label: t('brand'), value: carpet.brand },
+        { label: t('model'), value: carpet.model },
+        { label: t('price'), value: `${carpet.price} TL` },
+        { label: t('size'), value: carpet.size },
+        { label: t('pattern'), value: carpet.pattern },
+        { label: t('texture'), value: carpet.texture },
+        { label: t('yarn_type'), value: carpet.yarnType },
+        { label: t('type'), value: carpet.type },
+        { label: t('barcode_id'), value: carpet.barcodeId },
+        { label: t('qr_code_id'), value: carpet.qrCodeId },
+        { label: t('created_at'), value: new Date(carpet.createdAt).toLocaleDateString() },
+    ];
+    
+    const editFields = [
+        { name: 'name', label: t('name'), type: 'text', required: true },
+        { name: 'brand', label: t('brand'), type: 'text' },
+        { name: 'model', label: t('model'), type: 'text' },
+        { name: 'price', label: t('price'), type: 'number' },
+        { name: 'pattern', label: t('pattern'), type: 'text' },
+        { name: 'texture', label: t('texture'), type: 'text' },
+        { name: 'type', label: t('type'), type: 'text' },
+        { name: 'barcodeId', label: t('barcode_id'), type: 'text' },
+        { name: 'qrCodeId', label: t('qr_code_id'), type: 'text' },
+        { name: 'description', label: t('description'), type: 'textarea' },
+    ];
+
+    return e(Modal, { isOpen: true, onClose },
+        e('div', { className: 'relative' },
+            e('img', { src: carpet.imageUrl, alt: carpet.name, className: 'w-full h-64 object-cover' }),
+            e('button', { onClick: onClose, className: 'absolute top-3 right-3 p-2 bg-black/50 rounded-full' }, e(XMarkIcon, { className: 'h-6 w-6 text-white' })),
+            e('div', { className: 'p-6' },
+                e('div', { className: 'flex justify-between items-start mb-4' },
+                    isEditing ?
+                        e(FormInput, { label: t('name'), name: 'name', value: editedCarpet.name, onChange: handleChange, required: true }) :
+                        e('h2', { className: 'text-2xl font-bold' }, carpet.name),
+                    e('button', { onClick: () => onToggleFavorite(carpet.id) }, 
+                        e(HeartIcon, { className: `h-8 w-8 transition-colors ${carpet.isFavorite ? 'text-red-500' : 'text-slate-400'}`, fill: carpet.isFavorite ? 'currentColor' : 'none' })
+                    )
+                ),
+                isEditing ? (
+                    e('div', null, 
+                        ...editFields.map(f => e(FormInput, { key: f.name, ...f, value: editedCarpet[f.name as keyof Carpet], onChange: handleChange })),
+                        e(FormSelect, { label: t('size'), name: 'size', value: isCustomSize ? 'Other' : editedCarpet.size, onChange: handleSizeChange, options: STANDARD_CARPET_SIZES }),
+                        isCustomSize && e(FormInput, { label: t('enter_custom_size'), name: 'size', value: editedCarpet.size, onChange: handleCustomSizeChange }),
+                        e(FormSelect, { label: t('yarn_type'), name: 'yarnType', value: isCustomYarn ? 'Other' : editedCarpet.yarnType, onChange: handleYarnChange, options: STANDARD_YARN_TYPES }),
+                        isCustomYarn && e(FormInput, { label: t('yarn_type'), name: 'yarnType', value: editedCarpet.yarnType, onChange: handleCustomYarnChange })
+                    )
+                ) : (
+                    e(React.Fragment, null,
+                        e('p', { className: 'text-slate-600 dark:text-slate-400 mb-4' }, carpet.description),
+                        e('div', { className: 'grid grid-cols-2 gap-x-4' },
+                            ...detailFields.map(f => renderDetail(f.label, f.value))
+                        )
+                    )
+                ),
+                e('div', { className: 'mt-6 flex justify-between' },
+                    e('div', { className: 'flex space-x-2' },
+                        e('button', { onClick: handleDelete, className: 'p-2 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-md flex items-center' },
+                            e(TrashIcon, { className: 'h-5 w-5 mr-1' }),
+                            t('delete')
+                        )
+                    ),
+                    e('div', { className: 'flex space-x-2' },
+                        isEditing ? (
+                            e(React.Fragment, null,
+                                e('button', { onClick: () => setIsEditing(false), className: 'px-4 py-2 rounded-md bg-slate-200 dark:bg-slate-600' }, t('cancel')),
+                                e('button', { onClick: handleSave, className: 'px-4 py-2 rounded-md bg-blue-600 text-white' }, t('save_changes'))
+                            )
+                        ) : (
+                            e('button', { onClick: () => setIsEditing(true), className: 'px-4 py-2 rounded-md bg-blue-600 text-white' }, t('edit'))
+                        )
+                    )
+                )
+            )
+        )
+    );
+};
+
+const AddCarpetView = ({ onCarpetAdded }: { onCarpetAdded: () => void }) => {
+    const { t } = useSettings();
+    const { addCarpet, getDetailsFromImage } = useCarpets();
+    const [carpetData, setCarpetData] = useState<Partial<Carpet>>({ name: '', brand: '', model: '', price: 0, size: '', pattern: '', texture: '', yarnType: '', type: '', description: '', barcodeId: '', qrCodeId: '' });
+    const [imageFile, setImageFile] = useState<File | null>(null);
+    const [isAiLoading, setIsAiLoading] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const [error, setError] = useState('');
+    const [isBarcodeScannerOpen, setIsBarcodeScannerOpen] = useState(false);
+    const [barcodeScanType, setBarcodeScanType] = useState<'barcode' | 'qr_code'>('barcode');
+    // FIX: Removed `isApiError` from state as it's no longer needed after API key handling refactor.
+    const [infoModal, setInfoModal] = useState<{ isOpen: boolean; title: string; message: string; }>({ isOpen: false, title: '', message: '' });
+
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+        const { name, value } = e.target;
+        setCarpetData(prev => ({ ...prev, [name]: name === 'price' ? Number(value) : value }));
+    };
+
+    const handleSizeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const value = e.target.value;
+        if (value === "Other") {
+            setCarpetData(prev => ({ ...prev, size: '' }));
+        } else {
+            setCarpetData(prev => ({ ...prev, size: value }));
+        }
+    };
+    const handleCustomSizeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setCarpetData(prev => ({ ...prev, size: e.target.value }));
+    };
+
+    const handleYarnChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const value = e.target.value;
+        if (value === "Other") {
+            setCarpetData(prev => ({ ...prev, yarnType: '' }));
+        } else {
+            setCarpetData(prev => ({ ...prev, yarnType: value }));
+        }
+    };
+     const handleCustomYarnChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setCarpetData(prev => ({ ...prev, yarnType: e.target.value }));
+    };
+
+    const handleImageSelect = (file: File) => {
+        setImageFile(file);
+    };
+
+    const handleAiScan = async () => {
+        if (!imageFile) {
+            setError(t('carpet_image') + ' ' + t('required_field').toLowerCase());
+            return;
+        }
+        setError('');
+        setIsAiLoading(true);
+        try {
+            const details = await getDetailsFromImage(imageFile);
+            setCarpetData(prev => ({ ...prev, ...details }));
+        // FIX: Updated error handling to show a generic AI error message, reflecting the new API key management strategy.
+        } catch (err: any) {
+            console.error("AI Scan Error:", err);
+            setInfoModal({
+                isOpen: true,
+                title: t('ai_analysis_error'),
+                message: err.message,
+            });
+        } finally {
+            setIsAiLoading(false);
+        }
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!imageFile || !carpetData.name) {
+            setError(`${t('carpet_image')} and ${t('name')} are required.`);
+            return;
+        }
+        setError('');
+        setIsSaving(true);
+        try {
+            await addCarpet(carpetData, imageFile);
+            onCarpetAdded(); // Switch view
+        } catch (err) {
+            setError("Failed to save carpet. Please try again.");
+            console.error(err);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+    
+    const openBarcodeScanner = (type: 'barcode' | 'qr_code') => {
+        setBarcodeScanType(type);
+        setIsBarcodeScannerOpen(true);
+    };
+
+    const handleScanSuccess = (value: string) => {
+        if(barcodeScanType === 'barcode') {
+            setCarpetData(prev => ({ ...prev, barcodeId: value }));
+        } else {
+            setCarpetData(prev => ({ ...prev, qrCodeId: value }));
+        }
+        setIsBarcodeScannerOpen(false);
+    };
+    
+    const isCustomSize = !STANDARD_CARPET_SIZES.includes(carpetData.size || "");
+    const isCustomYarn = !STANDARD_YARN_TYPES.includes(carpetData.yarnType || "");
+
+    return e('div', null,
+        e(InfoModal, {
+            isOpen: infoModal.isOpen,
+            title: infoModal.title,
+            message: infoModal.message,
+            onClose: () => setInfoModal({ isOpen: false, title: '', message: '' })
+        }),
+        isBarcodeScannerOpen && e(BarcodeScannerModal, {
+            onScanSuccess: handleScanSuccess,
+            onClose: () => setIsBarcodeScannerOpen(false),
+            scanType: barcodeScanType,
+        }),
+        e('form', { onSubmit: handleSubmit, className: 'space-y-4' },
+            e(ImageUploader, { onImageSelect: handleImageSelect }),
+            e('button', {
+                type: 'button',
+                onClick: handleAiScan,
+                disabled: isAiLoading || !imageFile,
+                className: 'w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500',
+            },
+                isAiLoading ? e(Spinner, { className: 'animate-spin -ml-1 mr-3 h-5 w-5' }) : e(WandSparkles, { className: '-ml-1 mr-2 h-5 w-5' }),
+                isAiLoading ? t('analyzing_image') : t('scan_with_ai')
+            ),
+            error && e('p', { className: 'text-red-500 text-sm' }, error),
+            e(FormInput, { label: t('name'), name: 'name', value: carpetData.name, onChange: handleChange, required: true }),
+            e(FormInput, { label: t('brand'), name: 'brand', value: carpetData.brand, onChange: handleChange }),
+            e(FormInput, { label: t('model'), name: 'model', value: carpetData.model, onChange: handleChange }),
+            e(FormInput, { label: t('price'), name: 'price', value: carpetData.price, onChange: handleChange, type: 'number' }),
+            
+            e(FormSelect, { label: t('size'), name: 'size', value: isCustomSize ? 'Other' : (carpetData.size || ''), onChange: handleSizeChange, options: STANDARD_CARPET_SIZES }),
+            isCustomSize && e(FormInput, { label: t('enter_custom_size'), name: 'size', value: carpetData.size, onChange: handleCustomSizeChange }),
+            
+            e(FormSelect, { label: t('yarn_type'), name: 'yarnType', value: isCustomYarn ? 'Other' : (carpetData.yarnType || ''), onChange: handleYarnChange, options: STANDARD_YARN_TYPES }),
+            isCustomYarn && e(FormInput, { label: t('yarn_type'), name: 'yarnType', value: carpetData.yarnType, onChange: handleCustomYarnChange }),
+
+            e(FormInput, { label: t('pattern'), name: 'pattern', value: carpetData.pattern, onChange: handleChange }),
+            e(FormInput, { label: t('texture'), name: 'texture', value: carpetData.texture, onChange: handleChange }),
+            e(FormInput, { label: t('type'), name: 'type', value: carpetData.type, onChange: handleChange }),
+            e(FormInput, { label: t('description'), name: 'description', value: carpetData.description, onChange: handleChange, type: 'textarea' }),
+            
+             e('div', { className: 'flex space-x-2' },
+                e(FormInput, { label: t('barcode_id'), name: 'barcodeId', value: carpetData.barcodeId, onChange: handleChange }),
+                e('button', { type: 'button', onClick: () => openBarcodeScanner('barcode'), className: 'mt-6 p-2 bg-slate-200 dark:bg-slate-600 rounded-md' }, e(BarcodeIcon, {className: 'h-6 w-6'}))
+            ),
+             e('div', { className: 'flex space-x-2' },
+                e(FormInput, { label: t('qr_code_id'), name: 'qrCodeId', value: carpetData.qrCodeId, onChange: handleChange }),
+                e('button', { type: 'button', onClick: () => openBarcodeScanner('qr_code'), className: 'mt-6 p-2 bg-slate-200 dark:bg-slate-600 rounded-md' }, e(QrCodeIcon, {className: 'h-6 w-6'}))
+            ),
+
+            e('button', {
+                type: 'submit',
+                disabled: isSaving,
+                className: 'w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
+            },
+                isSaving ? e(Spinner, { className: 'animate-spin -ml-1 mr-3 h-5 w-5' }) : null,
+                t('add_new_carpet')
+            )
+        )
+    );
+};
+
+const MatchCarpetView = () => {
+    const { t } = useSettings();
+    const { findMatchByImage } = useCarpets();
+    const [imageFile, setImageFile] = useState<File | null>(null);
+    const [isLoading, setIsLoading] = useState(false);
+    const [result, setResult] = useState<'found' | 'not_found' | null>(null);
+    const [matchedCarpet, setMatchedCarpet] = useState<Carpet | null>(null);
+    const [detailModalCarpet, setDetailModalCarpet] = useState<Carpet | null>(null);
+    // FIX: Removed `isApiError` from state as it's no longer needed after API key handling refactor.
+    const [infoModal, setInfoModal] = useState<{ isOpen: boolean; title: string; message: string; }>({ isOpen: false, title: '', message: '' });
+
+
+    const handleImageSelect = (file: File) => {
+        setImageFile(file);
+        setResult(null);
+        setMatchedCarpet(null);
+    };
+
+    const handleMatchSearch = async () => {
+        if (!imageFile) return;
+        setIsLoading(true);
+        setResult(null);
+        setMatchedCarpet(null);
+        try {
+            const match = await findMatchByImage(imageFile);
+            if (match) {
+                setResult('found');
+                setMatchedCarpet(match);
+            } else {
+                setResult('not_found');
+            }
+        // FIX: Updated error handling to show a generic AI error message, reflecting the new API key management strategy.
+        } catch (err: any) {
+             setInfoModal({
+                isOpen: true,
+                title: t('ai_match_error'),
+                message: err.message,
+            });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+    
+    // Dummy functions for modal compatibility
+    const handleUpdate = () => {};
+    const handleDelete = () => {};
+    const handleToggleFavorite = () => {};
+
+    return e('div', null,
+         e(InfoModal, {
+            isOpen: infoModal.isOpen,
+            title: infoModal.title,
+            message: infoModal.message,
+            onClose: () => setInfoModal({ isOpen: false, title: '', message: '' })
+        }),
+        e(ImageUploader, { onImageSelect: handleImageSelect }),
+        e('button', {
+            type: 'button',
+            onClick: handleMatchSearch,
+            disabled: isLoading || !imageFile,
+            className: 'mt-4 w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500',
+        },
+            isLoading ? e(Spinner, { className: 'animate-spin -ml-1 mr-3 h-5 w-5' }) : e(SearchIcon, { className: '-ml-1 mr-2 h-5 w-5' }),
+            isLoading ? t('searching_for_match') : t('find_match')
+        ),
+
+        result && e('div', { className: 'mt-6 text-center' },
+            result === 'found' && matchedCarpet ? (
+                e('div', null,
+                    e('h3', { className: 'text-lg font-medium text-green-600 dark:text-green-400' }, t('match_found')),
+                    e('div', { className: 'mt-4 max-w-xs mx-auto' }, 
+                        e(CarpetCard, { carpet: matchedCarpet, onCarpetClick: () => setDetailModalCarpet(matchedCarpet) })
+                    )
+                )
+            ) : (
+                e('h3', { className: 'text-lg font-medium text-amber-600 dark:text-amber-400' }, t('no_match_found'))
+            )
+        ),
+        
+        detailModalCarpet && e(CarpetDetailModal, {
+            carpet: detailModalCarpet,
+            onClose: () => setDetailModalCarpet(null),
+            onUpdate: handleUpdate,
+            onDelete: handleDelete,
+            onToggleFavorite: handleToggleFavorite,
+        })
+    );
+};
+
+const SettingsView = () => {
+    // FIX: Removed `apiKey` and `setApiKey` as they are no longer managed through settings.
     const { language, setLanguage, theme, setTheme, t } = useSettings();
-    const { carpets } = useCarpets();
+    const { carpets, replaceAllCarpets } = useCarpets();
     const importInputRef = useRef<HTMLInputElement>(null);
 
     const handleExport = () => {
         try {
             const dataStr = JSON.stringify(carpets, null, 2);
             const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+            
             const exportFileDefaultName = 'carpet_catalog_export.json';
+            
             const linkElement = document.createElement('a');
             linkElement.setAttribute('href', dataUri);
             linkElement.setAttribute('download', exportFileDefaultName);
             linkElement.click();
-        } catch (e) {
+        } catch (err) {
+            console.error("Export failed", err);
             alert(t('export_error'));
         }
     };
-
+    
     const handleImport = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const fileReader = new FileReader();
-        if (!event.target.files) return;
-        fileReader.readAsText(event.target.files[0], "UTF-8");
-        fileReader.onload = e => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (e) => {
             try {
-                const importedCarpets = JSON.parse(e.target?.result as string);
-                if (Array.isArray(importedCarpets)) {
-                    // Simple validation
-                    if(importedCarpets.every(item => item.id && item.name)) {
-                        replaceAllCarpets(importedCarpets);
-                        alert(t('import_success'));
-                    } else {
-                        throw new Error("Invalid format");
-                    }
-                } else {
-                    throw new Error("Not an array");
-                }
+                const text = e.target?.result;
+                if (typeof text !== 'string') throw new Error("File could not be read");
+                const importedCarpets = JSON.parse(text);
+                await replaceAllCarpets(importedCarpets);
+                alert(t('import_success'));
             } catch (err) {
+                console.error("Import failed", err);
                 alert(t('import_error'));
             }
         };
+        reader.readAsText(file);
     };
-    
+
+    // FIX: Per React.createElement conventions and TypeScript, component props with children should mark `children` as optional in the type definition to avoid type errors at the call site.
+    const SettingsSection = ({ title, children }: { title: string, children?: React.ReactNode }) =>
+        e('div', { className: 'mb-6' },
+            e('h3', { className: 'text-lg font-semibold border-b border-slate-300 dark:border-slate-600 pb-2 mb-3' }, title),
+            children
+        );
+        
+    // FIX: Per React.createElement conventions and TypeScript, component props with children should mark `children` as optional in the type definition to avoid type errors at the call site.
+    const SettingsItem = ({ label, children }: { label: string, children?: React.ReactNode }) =>
+        e('div', { className: 'flex items-center justify-between py-2' },
+            e('label', { className: 'text-md' }, label),
+            children
+        );
+
     return e('div', { className: 'space-y-6' },
-        e('div', {},
-            e('h3', { className: 'text-lg font-semibold mb-2' }, t('language')),
-            e('select', { 
-                value: language,
-                onChange: (e: React.ChangeEvent<HTMLSelectElement>) => setLanguage(e.target.value as 'en' | 'tr'),
-                className: 'w-full p-2 rounded-md bg-slate-200 dark:bg-slate-700 border border-transparent'
-            },
-                e('option', { value: 'en' }, 'English'),
-                e('option', { value: 'tr' }, 'Türkçe')
+        e(SettingsSection, { title: t('language') },
+            e(SettingsItem, { label: t('language') },
+                e('select', { 
+                    value: language, 
+                    onChange: (ev: React.ChangeEvent<HTMLSelectElement>) => setLanguage(ev.target.value as 'en' | 'tr'),
+                    className: 'p-2 rounded-md bg-slate-200 dark:bg-slate-700'
+                },
+                    e('option', { value: 'tr' }, 'Türkçe'),
+                    e('option', { value: 'en' }, 'English')
+                )
             )
         ),
-        e('div', {},
-            e('h3', { className: 'text-lg font-semibold mb-2' }, t('theme')),
-            e('div', { className: 'flex gap-4' },
-                e('button', { 
-                    onClick: () => setTheme('light'),
-                    className: `w-full p-2 rounded-md ${theme === 'light' ? 'bg-blue-500 text-white' : 'bg-slate-200 dark:bg-slate-700'}`
-                }, t('light')),
-                e('button', { 
-                    onClick: () => setTheme('dark'),
-                    className: `w-full p-2 rounded-md ${theme === 'dark' ? 'bg-blue-500 text-white' : 'bg-slate-200 dark:bg-slate-700'}`
-                }, t('dark'))
+        e(SettingsSection, { title: t('theme') },
+            e(SettingsItem, { label: t('theme') },
+                e('div', { className: 'flex space-x-2' },
+                    e('button', { 
+                        onClick: () => setTheme('light'),
+                        className: `px-4 py-2 rounded-md ${theme === 'light' ? 'bg-blue-500 text-white' : 'bg-slate-200 dark:bg-slate-700'}`
+                    }, t('light')),
+                    e('button', { 
+                        onClick: () => setTheme('dark'),
+                        className: `px-4 py-2 rounded-md ${theme === 'dark' ? 'bg-blue-500 text-white' : 'bg-slate-200 dark:bg-slate-700'}`
+                    }, t('dark'))
+                )
             )
         ),
-        e('div', {},
-            e('h3', { className: 'text-lg font-semibold mb-2' }, t('data_management')),
-            e('div', { className: 'flex gap-4' },
-                e('button', { 
-                    onClick: handleExport,
-                    className: 'w-full p-2 flex items-center justify-center gap-2 rounded-md bg-slate-200 dark:bg-slate-700'
-                }, e(ArrowDownTrayIcon, { className: 'h-5 w-5' }), t('export_data')),
+        // FIX: Removed the API Key configuration section from the UI to align with security best practices.
+        e(SettingsSection, { title: t('data_management') },
+            e('div', { className: 'flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4' },
+                e('input', { ref: importInputRef, type: 'file', accept: '.json', className: 'hidden', onChange: handleImport }),
                 e('button', { 
                     onClick: () => importInputRef.current?.click(),
-                    className: 'w-full p-2 flex items-center justify-center gap-2 rounded-md bg-slate-200 dark:bg-slate-700'
-                }, e(ArrowUpTrayIcon, { className: 'h-5 w-5' }), t('import_data')),
-                e('input', { type: 'file', ref: importInputRef, onChange: handleImport, accept: ".json", className: 'hidden' })
+                    className: 'w-full flex items-center justify-center px-4 py-2 rounded-md bg-slate-200 dark:bg-slate-700'
+                }, e(ArrowDownTrayIcon, { className: 'h-5 w-5 mr-2' }), t('import_data')),
+                e('button', { 
+                    onClick: handleExport,
+                    className: 'w-full flex items-center justify-center px-4 py-2 rounded-md bg-slate-200 dark:bg-slate-700'
+                }, e(ArrowUpTrayIcon, { className: 'h-5 w-5 mr-2' }), t('export_data'))
             )
         )
     );
 };
 
-const CarpetDetailModal = ({ carpet, onClose, onUpdate, onDelete, onToggleFavorite }: { carpet: Carpet, onClose: () => void, onUpdate: (c: Carpet) => void, onDelete: (id: string) => void, onToggleFavorite: (id: string) => void }) => {
-    const { t } = useSettings();
-    const [isEditing, setIsEditing] = useState(false);
-    const [editedCarpet, setEditedCarpet] = useState(carpet);
-
-    const handleSave = () => {
-        onUpdate(editedCarpet);
-        setIsEditing(false);
-    };
-
-    const handleDelete = () => {
-        if (window.confirm(t('delete_carpet_confirm'))) {
-            onDelete(carpet.id);
-            onClose();
-        }
-    };
-
-    const handleInputChange = (field: keyof Carpet, value: string | number) => {
-        setEditedCarpet(c => ({ ...c, [field]: value }));
-    };
-    
-    const DetailItem = ({ label, value }: { label: string, value: string | number | undefined }) => value ? e('div', {},
-        e('p', { className: 'text-sm font-medium text-slate-500 dark:text-slate-400' }, label),
-        e('p', {}, String(value))
-    ) : null;
-
-    const isCustomSize = editedCarpet.size ? !STANDARD_CARPET_SIZES.includes(editedCarpet.size) : false;
-    const sizeSelectValue = isCustomSize ? 'Other' : editedCarpet.size || '';
-
-    const EditForm = () => e(React.Fragment, null,
-        e(EditItem, { label: t('name'), field: 'name' }),
-        e(EditItem, { label: t('brand'), field: 'brand' }),
-        e(EditItem, { label: t('model'), field: 'model' }),
-        e(EditItem, { label: t('price'), field: 'price', type: 'number' }),
-        // --- Custom Size Input ---
-        e('div', {},
-            e('label', { className: 'block text-sm font-medium' }, t('size')),
-            e('select', {
-                value: sizeSelectValue,
-                onChange: (ev: React.ChangeEvent<HTMLSelectElement>) => {
-                    const value = ev.target.value;
-                    handleInputChange('size', value !== 'Other' ? value : '');
-                },
-                className: 'mt-1 w-full p-2 rounded-md bg-slate-200 dark:bg-slate-700'
-            },
-                e('option', { value: '' }, t('select_one')),
-                ...STANDARD_CARPET_SIZES.map(s => e('option', { key: s, value: s }, s)),
-                e('option', { value: 'Other' }, t('other'))
-            ),
-            (sizeSelectValue === 'Other') && e('input', {
-                type: 'text',
-                placeholder: t('enter_custom_size'),
-                value: editedCarpet.size || '',
-                onChange: (ev: React.ChangeEvent<HTMLInputElement>) => handleInputChange('size', ev.target.value),
-                className: 'mt-2 w-full p-2 rounded-md bg-slate-200 dark:bg-slate-700'
-            })
-        ),
-        e(EditItem, { label: t('pattern'), field: 'pattern' }),
-        e(EditItem, { label: t('texture'), field: 'texture' }),
-         // --- Yarn Type Dropdown ---
-        e('div', {},
-            e('label', { className: 'block text-sm font-medium' }, t('yarn_type')),
-            e('select', {
-                value: editedCarpet.yarnType || '',
-                onChange: (ev: React.ChangeEvent<HTMLSelectElement>) => handleInputChange('yarnType', ev.target.value),
-                className: 'mt-1 w-full p-2 rounded-md bg-slate-200 dark:bg-slate-700'
-            },
-                e('option', { value: '' }, t('select_one')),
-                ...STANDARD_YARN_TYPES.map(type => e('option', { key: type, value: type }, type)),
-                e('option', { value: 'Other' }, t('other')),
-                e('option', { value: 'Unknown' }, t('unknown'))
-            )
-        ),
-        e(EditItem, { label: t('type'), field: 'type' }),
-        e(EditItem, { label: t('barcode_id'), field: 'barcodeId' }),
-        e(EditItem, { label: t('qr_code_id'), field: 'qrCodeId' }),
-        e(EditItem, { label: t('description'), field: 'description', type: 'textarea' }),
-    );
-
-    const EditItem = ({ label, field, type = 'text' }: { label: string, field: keyof Carpet, type?: string }) => e('div', {},
-        e('label', { className: 'block text-sm font-medium' }, label),
-        type === 'textarea'
-            ? e('textarea', {
-                value: String(editedCarpet[field] || ''),
-                rows: 4,
-                onChange: (ev: React.ChangeEvent<HTMLTextAreaElement>) => setEditedCarpet(c => ({...c, [field]: ev.target.value })),
-                className: 'mt-1 w-full p-2 rounded-md bg-slate-200 dark:bg-slate-700'
-            })
-            : e('input', {
-                type,
-                value: String(editedCarpet[field] || ''),
-                onChange: (ev: React.ChangeEvent<HTMLInputElement>) => setEditedCarpet(c => ({...c, [field]: type === 'number' ? parseInt(ev.target.value) || 0 : ev.target.value })),
-                className: 'mt-1 w-full p-2 rounded-md bg-slate-200 dark:bg-slate-700'
-            })
-    );
-
-    return e('div', { className: 'fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4', onClick: onClose },
-        e('div', { className: 'bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col', onClick: (e: React.MouseEvent) => e.stopPropagation() },
-            e('div', { className: 'p-4 border-b dark:border-slate-700 flex justify-between items-center' },
-                e('h2', { className: 'text-xl font-bold truncate' }, isEditing ? t('edit_carpet_details') : carpet.name),
-                e('button', { onClick: onClose, className: 'flex-shrink-0 ml-4' }, e(XMarkIcon, { className: 'h-6 w-6' }))
-            ),
-            e('div', { className: 'p-4 overflow-y-auto space-y-4' },
-                e('img', { src: carpet.imageUrl, alt: carpet.name, className: 'w-full h-64 object-contain rounded-md bg-slate-100 dark:bg-slate-700' }),
-                isEditing
-                    ? e(EditForm, null)
-                    : e(React.Fragment, null,
-                        e('p', {}, carpet.description),
-                        e('div', { className: 'grid grid-cols-2 gap-4 pt-4' },
-                            e(DetailItem, { label: t('brand'), value: carpet.brand }),
-                            e(DetailItem, { label: t('model'), value: carpet.model }),
-                            e(DetailItem, { label: t('price'), value: `$${carpet.price}` }),
-                            e(DetailItem, { label: t('size'), value: carpet.size }),
-                            e(DetailItem, { label: t('pattern'), value: carpet.pattern }),
-                            e(DetailItem, { label: t('texture'), value: carpet.texture }),
-                            e(DetailItem, { label: t('yarn_type'), value: carpet.yarnType }),
-                            e(DetailItem, { label: t('type'), value: carpet.type }),
-                            e(DetailItem, { label: t('barcode_id'), value: carpet.barcodeId }),
-                            e(DetailItem, { label: t('qr_code_id'), value: carpet.qrCodeId }),
-                            e(DetailItem, { label: t('created_at'), value: new Date(carpet.createdAt).toLocaleDateString() }),
-                        )
-                    )
-            ),
-            e('div', { className: 'p-4 border-t dark:border-slate-700 flex items-center gap-2' },
-                e('button', {
-                    onClick: () => onToggleFavorite(carpet.id),
-                    className: `p-2 rounded-full ${carpet.isFavorite ? 'text-red-500 bg-red-100 dark:bg-red-900/50' : 'text-slate-500 bg-slate-100 dark:bg-slate-700'}`
-                }, e(HeartIcon, { className: 'h-6 w-6', fill: carpet.isFavorite ? 'currentColor' : 'none' })),
-                e('button', { onClick: handleDelete, className: 'p-2 rounded-full text-slate-500 bg-slate-100 dark:bg-slate-700' }, e(TrashIcon, { className: 'h-6 w-6' })),
-                e('div', { className: 'flex-grow' }),
-                isEditing
-                    ? e(React.Fragment, null,
-                        e('button', { onClick: () => setIsEditing(false), className: 'px-4 py-2 rounded-md' }, t('cancel')),
-                        e('button', { onClick: handleSave, className: 'px-4 py-2 rounded-md bg-blue-600 text-white' }, t('save_changes')),
-                    )
-                    : e('button', { onClick: () => setIsEditing(true), className: 'px-4 py-2 rounded-md bg-blue-600 text-white' }, t('edit'))
-            )
-        )
-    );
-};
-
-const LoadingSpinner = () => e('div', { className: 'flex justify-center items-center h-full fixed inset-0' },
-    e(Spinner, { className: 'h-12 w-12 animate-spin text-blue-500' })
-);
-
-const InfoModal = ({ title, message, onClose, t }: { title: string, message: string, onClose: () => void, t: (key: string) => string }) => {
-    return e('div', { className: 'fixed inset-0 z-[101] bg-black/50 flex items-center justify-center p-4', onClick: onClose },
-        e('div', { className: 'bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-sm', onClick: (evt: React.MouseEvent) => evt.stopPropagation() },
-            e('div', { className: 'p-4 border-b dark:border-slate-700' },
-                e('h3', { className: 'text-lg font-semibold' }, title)
-            ),
-            e('div', { className: 'p-4' },
-                e('p', { className: 'text-slate-600 dark:text-slate-300' }, message)
-            ),
-            e('div', { className: 'p-4 border-t dark:border-slate-700 flex justify-end' },
-                e('button', { onClick: onClose, className: 'px-4 py-2 rounded-md bg-blue-600 text-white' }, t('ok'))
-            )
-        )
-    );
-};
-
-
-const App = () => {
+function App() {
+  const { carpets, loading, error: dbError, toggleFavorite, updateCarpet, deleteCarpet } = useCarpets();
+  // FIX: Removed `apiKey` from settings context as it's no longer needed.
   const { t } = useSettings();
-  const {
-    carpets, loading, error, addCarpet, updateCarpet, deleteCarpet, toggleFavorite, replaceAllCarpets, getDetailsFromImage, findMatchByImage,
-  } = useCarpets();
-
   const [currentView, setCurrentView] = useState('home');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCarpet, setSelectedCarpet] = useState<Carpet | null>(null);
-  const [infoModal, setInfoModal] = useState<{ title: string; message: string } | null>(null);
+
+  // FIX: Removed useEffect for `initializeAi` as API key is now handled via environment variables.
+  
+  const handleCarpetClick = (carpet: Carpet) => {
+    setSelectedCarpet(carpet);
+  };
+  
+  const handleCloseModal = () => {
+    setSelectedCarpet(null);
+  };
 
   const filteredCarpets = useMemo(() => {
-    const query = searchQuery.toLowerCase();
-    if (!query) return carpets;
-    return carpets.filter(c =>
-      c.name.toLowerCase().includes(query) ||
-      c.brand.toLowerCase().includes(query) ||
-      c.pattern.toLowerCase().includes(query) ||
-      c.barcodeId?.toLowerCase().includes(query) ||
-      c.qrCodeId?.toLowerCase().includes(query)
+    const lowerCaseQuery = searchQuery.toLowerCase();
+    return carpets.filter(c => 
+      c.name.toLowerCase().includes(lowerCaseQuery) ||
+      c.brand.toLowerCase().includes(lowerCaseQuery) ||
+      c.model.toLowerCase().includes(lowerCaseQuery) ||
+      c.barcodeId?.includes(lowerCaseQuery) ||
+      c.qrCodeId?.includes(lowerCaseQuery)
     );
-  }, [carpets, searchQuery]);
+  }, [searchQuery, carpets]);
 
-  const favoriteCarpets = useMemo(() => carpets.filter(c => c.isFavorite), [carpets]);
+  const favoriteCarpets = useMemo(() => filteredCarpets.filter(c => c.isFavorite), [filteredCarpets]);
 
   const renderContent = () => {
-    switch (currentView) {
+    if (loading) return e('div', { className: 'flex justify-center items-center h-64' }, e(Spinner, { className: 'h-8 w-8 animate-spin' }));
+    if (dbError) return e('p', { className: 'text-center text-red-500' }, dbError);
+
+    switch(currentView) {
       case 'home':
-        return e(CarpetGrid, { carpets: filteredCarpets, onCarpetClick: setSelectedCarpet });
+        return e(CarpetGrid, { carpets: filteredCarpets, onCarpetClick: handleCarpetClick });
       case 'favorites':
-        return e(CarpetGrid, { carpets: favoriteCarpets, onCarpetClick: setSelectedCarpet, isFavorites: true });
+        return e(CarpetGrid, { carpets: favoriteCarpets, onCarpetClick: handleCarpetClick, isFavorites: true });
       case 'add':
-        return e(AddCarpetView, { addCarpet, getDetailsFromImage, onFinished: () => setCurrentView('home'), setInfoModal });
+        return e(AddCarpetView, { onCarpetAdded: () => setCurrentView('home') });
       case 'match':
-        return e(MatchFinderView, { findMatchByImage, onMatchFound: (carpet) => { if(carpet) setSelectedCarpet(carpet); setCurrentView('home'); }, setInfoModal });
+          return e(MatchCarpetView, null);
       case 'settings':
-        return e(SettingsView, { replaceAllCarpets });
+        return e(SettingsView, null);
       default:
-        return e(CarpetGrid, { carpets: filteredCarpets, onCarpetClick: setSelectedCarpet });
+        return e(CarpetGrid, { carpets, onCarpetClick: handleCarpetClick });
     }
   };
 
-  return e('div', { className: 'font-sans bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-50 min-h-screen' },
-    e('div', { className: 'container mx-auto max-w-2xl flex flex-col min-h-screen' },
-      e(Header, { title: t('app_title'), searchQuery, setSearchQuery, currentView }),
-      e('main', { className: 'flex-grow p-4 pb-24' },
-        error ? e('p', { className: 'text-red-500 text-center' }, error) : null,
-        !loading && !error ? renderContent() : null,
-      ),
-      e(BottomNav, { currentView, setCurrentView }),
-      selectedCarpet ? e(CarpetDetailModal, { carpet: selectedCarpet, onClose: () => setSelectedCarpet(null), onUpdate: updateCarpet, onDelete: deleteCarpet, onToggleFavorite: toggleFavorite }) : null,
-      loading ? e(LoadingSpinner, null) : null,
-      infoModal ? e(InfoModal, { title: t(infoModal.title), message: t(infoModal.message), onClose: () => setInfoModal(null), t }) : null
-    )
+  return e('div', { className: 'min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100' },
+    e(Header, { title: t('app_title'), searchQuery, setSearchQuery, currentView }),
+    e('main', { className: 'p-4 pb-24 max-w-2xl mx-auto' }, renderContent()),
+    e(BottomNav, { currentView, setCurrentView }),
+    selectedCarpet && e(CarpetDetailModal, { 
+      carpet: selectedCarpet,
+      onClose: handleCloseModal,
+      onUpdate: (c: Carpet) => {
+        updateCarpet(c);
+        setSelectedCarpet(c); // Update the modal with the new data
+      },
+      onDelete: (id: string) => {
+          deleteCarpet(id);
+          handleCloseModal();
+      },
+      // FIX: Corrected prop passing to use the `toggleFavorite` function from the `useCarpets` hook.
+      onToggleFavorite: toggleFavorite
+    })
   );
-};
+}
 
 export default App;

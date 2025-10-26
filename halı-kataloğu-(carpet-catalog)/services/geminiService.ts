@@ -1,21 +1,13 @@
+// Add Vite client types to fix TypeScript error for import.meta.env
+/// <reference types="vite/client" />
+
+// FIX: Per Gemini API guidelines, import `GoogleGenAI` and `Type` directly.
 import { GoogleGenAI, Type } from "@google/genai";
 import type { Carpet } from '../types';
 
-const API_KEY = process.env.API_KEY;
-let ai: GoogleGenAI | null = null;
-
-// Lazily initialize the AI client to prevent app crash on load if API_KEY is missing.
-const getAiInstance = (): GoogleGenAI => {
-    if (ai) {
-        return ai;
-    }
-    if (!API_KEY) {
-        // This error is now thrown only when an AI feature is used, not on app load.
-        throw new Error("API_KEY environment variable not set.");
-    }
-    ai = new GoogleGenAI({ apiKey: API_KEY });
-    return ai;
-};
+// FIX: Initialize the AI client using Vite's environment variable syntax (`import.meta.env`).
+// This ensures the API key from the `.env.local` file (prefixed with `VITE_`) is correctly loaded.
+const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
 
 
 // Helper function to convert a File object to a Gemini-compatible format
@@ -31,13 +23,11 @@ const fileToGenerativePart = async (file: File) => {
 };
 
 export const extractCarpetDetails = async (imageFile: File): Promise<Partial<Carpet>> => {
-  const ai = getAiInstance();
   const imagePart = await fileToGenerativePart(imageFile);
   const prompt = `You are an expert carpet cataloger. Analyze the provided image of a carpet and extract its features. Respond ONLY with a valid JSON object. Do not include any other text or markdown formatting. If a value is unknown, use "Unknown". For price, provide an estimated integer value without currency symbols.
 
 The JSON object must follow this schema:`;
 
-  // Fix: Updated contents to be a single Content object for multi-part request.
   const result = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: { parts: [imagePart, {text: prompt}] },
@@ -61,7 +51,8 @@ The JSON object must follow this schema:`;
       }
   });
 
-  const text = (result.text ?? '').trim();
+  // FIX: Per Gemini API guidelines, the `.text` property on the response object should be used directly.
+  const text = result.text.trim();
   try {
     return JSON.parse(text);
   } catch (e) {
@@ -74,15 +65,14 @@ The JSON object must follow this schema:`;
 export const findMatchingCarpet = async (imageFile: File, allCarpets: Carpet[]): Promise<Carpet | null> => {
     if (allCarpets.length === 0) return null;
 
-    const ai = getAiInstance();
     const imagePart = await fileToGenerativePart(imageFile);
     
     // Step 1: Generate a description for the new image.
-    // Fix: Updated contents to be a single Content object for multi-part request.
     const descriptionResponse = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: { parts: [imagePart, {text: "Describe this carpet in detail for matching purposes, focusing on pattern, prominent colors, texture, and style."}] },
     });
+    // FIX: Per Gemini API guidelines, the `.text` property on the response object should be used directly.
     const targetDescription = descriptionResponse.text;
 
     // Step 2: Ask Gemini to find the best match from the existing carpet descriptions.
@@ -100,7 +90,6 @@ Candidate Carpets:
 ${JSON.stringify(candidateCarpets)}
 `;
 
-    // Fix: Simplified contents for a text-only prompt.
     const matchResult = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: matchingPrompt,
@@ -119,7 +108,8 @@ ${JSON.stringify(candidateCarpets)}
         }
     });
 
-    const matchText = (matchResult.text ?? '').trim();
+    // FIX: Per Gemini API guidelines, the `.text` property on the response object should be used directly.
+    const matchText = matchResult.text.trim();
     try {
         const result = JSON.parse(matchText);
         const bestMatchId = result.best_match_id;
