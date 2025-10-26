@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useSettings } from './hooks/useSettings';
 import { useCarpets } from './hooks/useCarpets';
@@ -234,8 +235,9 @@ const CarpetGrid: React.FC<{ carpets: Carpet[], onView: (carpet: Carpet) => void
         },
           React.createElement('div', { className: "relative" },
             React.createElement('img', { className: "w-full h-48 object-cover", src: carpet.imageUrl, alt: carpet.name }),
-            React.createElement('button', {
-              onClick: (e) => { e.stopPropagation(); onToggleFavorite(carpet.id); },
+            // FIX: Changed to motion.button and onTap to fix type inference issue with framer-motion.
+            React.createElement(motion.button, {
+              onTap: (e: MouseEvent) => { e.stopPropagation(); onToggleFavorite(carpet.id); },
               className: "absolute top-2 right-2 p-2 bg-black/40 rounded-full text-white hover:bg-pink-500 transition-colors",
               title: carpet.isFavorite ? "Remove from favorites" : "Add to favorites"
             },
@@ -660,18 +662,17 @@ const SettingsModal: React.FC<{ onClose: () => void, carpets: Carpet[], replaceA
         React.createElement('div', { className: "pb-4" },
           React.createElement('label', { className: "block font-semibold mb-2" }, t('language')),
           React.createElement('select', { value: language, onChange: e => setLanguage(e.target.value as any), className: "w-full p-2 rounded-lg bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 focus:ring-2 focus:ring-blue-500 focus:outline-none" },
-            // Fix: Pass children as a separate argument to `React.createElement` for intrinsic elements
-            // to potentially resolve type inference issues with props.
-            React.createElement('option', { value: "en" }, "English"),
-            React.createElement('option', { value: "tr" }, "Türkçe")
+            // FIX: Pass children as a property of the props object to resolve type inference issues.
+            React.createElement('option', { value: "en", children: "English" }),
+            React.createElement('option', { value: "tr", children: "Türkçe" })
           )
         ),
         React.createElement('div', { className: "py-4" },
           React.createElement('label', { className: "block font-semibold mb-2" }, t('theme')),
           React.createElement('select', { value: theme, onChange: e => setTheme(e.target.value as any), className: "w-full p-2 rounded-lg bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 focus:ring-2 focus:ring-blue-500 focus:outline-none" },
-            // Fix: Pass children as a separate argument to `React.createElement` for intrinsic elements.
-            React.createElement('option', { value: "light" }, t('light')),
-            React.createElement('option', { value: "dark" }, t('dark'))
+            // FIX: Pass children as a property of the props object to resolve type inference issues.
+            React.createElement('option', { value: "light", children: t('light') }),
+            React.createElement('option', { value: "dark", children: t('dark') })
           )
         ),
         React.createElement('div', { className: "pt-4" },
