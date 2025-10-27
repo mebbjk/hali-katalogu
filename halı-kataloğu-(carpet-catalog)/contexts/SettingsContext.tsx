@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useState, useEffect, ReactNode, useContext } from 'react';
 import { translations, Language } from '../translations';
 
 type Theme = 'light' | 'dark';
@@ -82,4 +82,12 @@ export const SettingsProvider: React.FC<SettingsProviderProps> = ({ children }) 
       {children}
     </SettingsContext.Provider>
   );
+};
+
+export const useSettings = () => {
+  const context = useContext(SettingsContext);
+  if (context === undefined) {
+    throw new Error('useSettings must be used within a SettingsProvider');
+  }
+  return context;
 };
