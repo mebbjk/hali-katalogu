@@ -11,7 +11,7 @@ import {
 import { readCodeFromImage } from '../services/geminiService';
 
 
-type ActiveTab = 'home' | 'favorites' | 'search';
+type ActiveTab = 'home' | 'favorites' | 'search' | 'settings_dummy';
 
 const App: React.FC = () => {
     const [activeTab, setActiveTab] = useState<ActiveTab>('home');
@@ -19,9 +19,20 @@ const App: React.FC = () => {
     const [isAddCarpetModalOpen, setIsAddCarpetModalOpen] = useState(false);
     const [carpetToEdit, setCarpetToEdit] = useState<Carpet | null>(null);
 
+    const handleOpenSettings = () => {
+        setActiveTab('settings_dummy');
+        setIsSettingsModalOpen(true);
+    };
+
+    const handleCloseSettings = () => {
+        setIsSettingsModalOpen(false);
+        setActiveTab('home'); // or whichever tab was active before
+    };
+
     const renderView = () => {
         switch (activeTab) {
             case 'home':
+            case 'settings_dummy': // Keep rendering home view when settings are open
                 return <HomeView onEdit={setCarpetToEdit} />;
             case 'favorites':
                 return <FavoritesView onEdit={setCarpetToEdit} />;
@@ -56,11 +67,11 @@ const App: React.FC = () => {
                 activeTab={activeTab} 
                 setActiveTab={setActiveTab}
                 onAddClick={() => setIsAddCarpetModalOpen(true)}
-                onSettingsClick={() => setIsSettingsModalOpen(true)}
+                onSettingsClick={handleOpenSettings}
             />
             
             <AnimatePresence>
-                {isSettingsModalOpen && <SettingsModal onClose={() => setIsSettingsModalOpen(false)} />}
+                {isSettingsModalOpen && <SettingsModal onClose={handleCloseSettings} />}
                 {isAddCarpetModalOpen && <CarpetFormModal carpet={carpetToEdit} onClose={() => setIsAddCarpetModalOpen(false)} />}
             </AnimatePresence>
 
@@ -91,11 +102,10 @@ const FavoritesView: React.FC<{onEdit: (carpet: Carpet) => void;}> = ({onEdit}) 
 };
 
 const SearchView: React.FC<{onEdit: (carpet: Carpet) => void;}> = ({onEdit}) => {
-    const { carpets, findMatchByImage } = useCarpets();
+    const { carpets } = useCarpets();
     const { t } = useSettings();
     const [searchTerm, setSearchTerm] = useState('');
     const [isSearchingByImage, setIsSearchingByImage] = useState(false);
-    const [matchedCarpet, setMatchedCarpet] = useState<Carpet | null>(null);
     const { addToast } = useToast();
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -284,13 +294,22 @@ const CarpetFormModal: React.FC<{ carpet: Carpet | null; onClose: () => void }> 
     };
     
     const handleAiFill = async () => {
-        if (!imageFile) {
+        if (!imageFile && !previewUrl) { // Use imageFile for new images, previewUrl for existing
             addToast(t('no_photo'), 'error');
             return;
         }
         setIsAnalyzing(true);
         try {
-            const details = await getDetailsFromImage(imageFile);
+            let details;
+            if (imageFile) {
+                details = await getDetailsFromImage(imageFile);
+            } else if (previewUrl) {
+                // If we only have a URL (editing), we can't re-analyze.
+                // A better implementation would fetch the blob if needed.
+                addToast("AI analysis requires a new photo.", "error");
+                setIsAnalyzing(false);
+                return;
+            }
             setFormData(prev => ({ ...prev, ...details }));
             addToast(t('ai_fill_details'), 'success');
         } catch (e) {
@@ -359,7 +378,7 @@ const CarpetFormModal: React.FC<{ carpet: Carpet | null; onClose: () => void }> 
                         </AnimatePresence>
                     </div>
                     
-                    {previewUrl && (
+                    {(previewUrl || imageFile) && (
                         <button type="button" onClick={handleAiFill} disabled={isAnalyzing} className="p-2 w-full flex justify-center items-center gap-2 rounded-md bg-purple-600 text-white hover:bg-purple-700 disabled:bg-purple-400">
                             <SparklesIcon className="w-5 h-5" />
                             {isAnalyzing ? t('analyzing_image') : t('ai_fill_details')}
@@ -471,32 +490,40 @@ const BottomNavBar: React.FC<{ activeTab: ActiveTab; setActiveTab: (tab: ActiveT
     const tabs: { id: ActiveTab; icon: React.FC<any>; label: string }[] = [
         { id: 'home', icon: HomeIcon, label: t('home') },
         { id: 'favorites', icon: HeartIcon, label: t('favorites') },
-    ];
-    const tabsRight: { id: ActiveTab; icon: React.FC<any>; label: string }[] = [
         { id: 'search', icon: SearchIcon, label: t('search') },
     ];
+    
+    // Find the index of the active tab to position the indicator
+    const activeIndex = tabs.findIndex(tab => tab.id === activeTab);
 
     return (
         <nav className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-white/70 dark:bg-zinc-800/70 backdrop-blur-lg shadow-lg rounded-full z-50 w-[calc(100%-2rem)] max-w-sm">
-            <div className="flex justify-around items-center p-2 relative">
+            <div className="flex justify-around items-center p-1 relative">
+                {/* Animated Indicator */}
+                <AnimatePresence>
+                {activeIndex !== -1 && (
+                    <motion.div
+                        layoutId="active-tab-indicator"
+                        className="absolute top-1 h-[calc(100%-0.5rem)] w-16 bg-purple-600/20 dark:bg-purple-500/30 rounded-full"
+                        initial={{ x: activeIndex * 68 }} // Approximate width of a tab item
+                        animate={{ x: activeIndex * 68 }}
+                        transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                    />
+                )}
+                </AnimatePresence>
+
                  {tabs.map((tab) => (
-                    <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex flex-col items-center gap-1 p-2 rounded-full transition-colors w-20 ${activeTab === tab.id ? 'text-purple-600' : 'text-zinc-500'}`}>
+                    <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`relative flex flex-col items-center gap-1 p-2 rounded-full transition-colors w-16 z-10 ${activeTab === tab.id ? 'text-purple-600 dark:text-purple-400' : 'text-zinc-500'}`}>
                         <tab.icon className="w-6 h-6" />
                         <span className="text-xs font-medium">{tab.label}</span>
                     </button>
                 ))}
                 
-                <button onClick={onAddClick} className="p-4 bg-purple-600 text-white rounded-full shadow-lg -translate-y-4">
+                <button onClick={onAddClick} className="relative z-10 p-4 bg-purple-600 text-white rounded-full shadow-lg -translate-y-3.5">
                     <PlusCircleIcon className="w-8 h-8"/>
                 </button>
                 
-                {tabsRight.map((tab) => (
-                    <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex flex-col items-center gap-1 p-2 rounded-full transition-colors w-20 ${activeTab === tab.id ? 'text-purple-600' : 'text-zinc-500'}`}>
-                        <tab.icon className="w-6 h-6" />
-                        <span className="text-xs font-medium">{tab.label}</span>
-                    </button>
-                ))}
-                 <button onClick={onSettingsClick} className={`flex flex-col items-center gap-1 p-2 rounded-full transition-colors w-20 text-zinc-500`}>
+                 <button onClick={onSettingsClick} className={`relative flex flex-col items-center gap-1 p-2 rounded-full transition-colors w-16 z-10 ${activeTab === 'settings_dummy' ? 'text-purple-600 dark:text-purple-400' : 'text-zinc-500'}`}>
                         <SettingsIcon className="w-6 h-6" />
                         <span className="text-xs font-medium">{t('settings')}</span>
                 </button>

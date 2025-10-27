@@ -17,6 +17,6 @@
     "noFallthroughCasesInSwitch": true,
     "types": ["node"]
   },
-  "include": ["src", "index.tsx", "types.ts", "services", "hooks", "contexts", "vite.config.ts"],
+  "include": ["src", "index.tsx", "types.ts", "services", "hooks", "contexts"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }
