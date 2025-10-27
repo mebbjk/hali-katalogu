@@ -1,1073 +1,604 @@
+import React, { useState, useMemo, useCallback, useRef, ReactNode } from 'react';
 
-
-import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+// Hooks
 import { useCarpets } from './hooks/useCarpets';
 import { useSettings } from './hooks/useSettings';
 import { useToast } from './hooks/useToast';
-import type { Carpet } from './types';
+
+// Components & Icons
 import {
-  HomeIcon, PlusIcon, SearchIcon, HeartIcon, Cog6ToothIcon, CameraIcon, WandSparkles, Spinner, XMarkIcon, TrashIcon, ArrowUpTrayIcon, ArrowDownTrayIcon, BarcodeIcon, QrCodeIcon, CheckCircleIcon, XCircleIcon
+  HomeIcon,
+  HeartIcon,
+  SearchIcon,
+  Cog6ToothIcon,
+  PlusIcon,
+  TrashIcon,
+  XMarkIcon,
+  WandSparkles,
+  CameraIcon,
+  Spinner,
+  ArrowUpTrayIcon,
+  ArrowDownTrayIcon,
+  CheckCircleIcon,
+  XCircleIcon,
 } from './components/icons';
 
-const e = React.createElement;
+// Types
+import type { Carpet } from './types';
 
-// --- Utility for Haptic Feedback ---
-const triggerHapticFeedback = (impact: 'light' | 'medium' | 'heavy' = 'light') => {
-    if (typeof window !== 'undefined' && 'vibrate' in navigator) {
-        const pattern: Record<typeof impact, number> = {
-            light: 20,
-            medium: 40,
-            heavy: 60
-        };
-        try {
-            navigator.vibrate(pattern[impact]);
-        } catch (e) {
-            // This can fail on some browsers if called too frequently.
-            // We can safely ignore the error.
-        }
-    }
-};
+type Page = 'home' | 'favorites' | 'match' | 'settings';
+type Modal = 'add' | 'edit' | 'detail' | 'delete' | 'match-result' | null;
 
-// --- Constants for Dropdowns ---
-const STANDARD_CARPET_SIZES = [
-    "80x150 cm", "80x300 cm", "120x180 cm", "160x230 cm", "200x290 cm", "240x340 cm"
-];
-const STANDARD_YARN_TYPES = [
-    "Polypropylene", "Wool", "Polyester", "Acrylic", "Cotton", "Viscose", "Jute", "Sisal", "Nylon"
-];
 
-// Barcode Detection API type definitions
-declare global {
-    interface Window {
-        BarcodeDetector: any;
-    }
-}
+// --- Reusable Components ---
 
-const BarcodeScannerModal = ({ onScanSuccess, onClose, scanType }: { onScanSuccess: (value: string) => void, onClose: () => void, scanType: 'barcode' | 'qr_code' }) => {
+const ModalComponent: React.FC<{ children: ReactNode; onClose: () => void; title: string }> = ({ children, onClose, title }) => (
+    <div className="fixed inset-0 bg-black bg-opacity-70 z-40 flex justify-center items-center p-4 animate-fade-in-fast" onClick={onClose}>
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <header className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
+                <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-100">{title}</h2>
+                <button onClick={onClose} className="text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors">
+                    <XMarkIcon className="w-6 h-6" />
+                </button>
+            </header>
+            <div className="p-6 overflow-y-auto">
+                {children}
+            </div>
+        </div>
+    </div>
+);
+
+const Button: React.FC<{ onClick?: () => void; children: ReactNode; className?: string; type?: 'button' | 'submit' | 'reset'; disabled?: boolean; }> = 
+({ onClick, children, className = '', type = 'button', disabled = false }) => (
+    <button
+        type={type}
+        onClick={onClick}
+        disabled={disabled}
+        className={`px-4 py-2 rounded-md font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-slate-900 ${
+            disabled 
+                ? 'bg-slate-300 dark:bg-slate-700 text-slate-500 cursor-not-allowed' 
+                : 'bg-indigo-600 text-white hover:bg-indigo-700 focus:ring-indigo-500'
+        } ${className}`}
+    >
+        {children}
+    </button>
+);
+
+
+const CarpetCard: React.FC<{ carpet: Carpet; onSelect: (carpet: Carpet) => void; onToggleFavorite: (id: string) => void; }> = ({ carpet, onSelect, onToggleFavorite }) => {
     const { t } = useSettings();
-    const videoRef = useRef<HTMLVideoElement>(null);
-    const [error, setError] = useState('');
-
-    useEffect(() => {
-        let stream: MediaStream | null = null;
-        let animationFrameId: number;
-
-        const startScan = async () => {
-            if (!('BarcodeDetector' in window)) {
-                setError('Barcode detection is not supported in this browser.');
-                return;
-            }
-
-            try {
-                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-                if (videoRef.current) {
-                    videoRef.current.srcObject = stream;
-                    await videoRef.current.play();
-                }
-
-                const barcodeDetector = new window.BarcodeDetector({
-                    formats: scanType === 'qr_code' ? ['qr_code'] : ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128']
-                });
-
-                const detect = async () => {
-                    if (videoRef.current && videoRef.current.readyState === 4) {
-                        const barcodes = await barcodeDetector.detect(videoRef.current);
-                        if (barcodes.length > 0) {
-                            triggerHapticFeedback('medium');
-                            onScanSuccess(barcodes[0].rawValue);
-                        } else {
-                            animationFrameId = requestAnimationFrame(detect);
-                        }
-                    } else {
-                        animationFrameId = requestAnimationFrame(detect);
-                    }
-                };
-                detect();
-
-            } catch (err) {
-                setError('Could not access camera. Please grant permission.');
-                console.error(err);
-            }
-        };
-
-        startScan();
-
-        return () => {
-            cancelAnimationFrame(animationFrameId);
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-            }
-        };
-    }, [onScanSuccess, scanType]);
-    
-    return e('div', { className: 'fixed inset-0 z-[100] bg-black/80 flex flex-col items-center justify-center', onClick: onClose },
-        e('div', { className: 'relative w-full max-w-md bg-zinc-900 rounded-lg p-4', onClick: (evt: React.MouseEvent) => evt.stopPropagation() },
-            e('video', { ref: videoRef, className: 'w-full rounded-md', autoPlay: true, playsInline: true, muted: true }),
-            error && e('p', { className: 'text-red-500 text-center mt-2' }, error),
-            e('p', { className: 'text-white text-center mt-4' }, scanType === 'barcode' ? t('scan_barcode_instruction') : t('scan_qrcode_instruction')),
-            e('button', { onClick: onClose, className: 'absolute top-2 right-2 p-2 bg-black/50 rounded-full' }, e(XMarkIcon, { className: 'h-6 w-6 text-white' }))
-        )
+    return (
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md overflow-hidden transition-transform hover:scale-105 cursor-pointer" onClick={() => onSelect(carpet)}>
+            <img src={carpet.imageUrl} alt={carpet.name} className="w-full h-48 object-cover" />
+            <div className="p-4">
+                <div className="flex justify-between items-start">
+                    <h3 className="font-bold text-lg text-slate-800 dark:text-slate-100 mb-1 truncate">{carpet.name}</h3>
+                    <button onClick={(e) => { e.stopPropagation(); onToggleFavorite(carpet.id); }} className="p-1 -mr-1 -mt-1 text-slate-400 hover:text-red-500">
+                        <HeartIcon className={`w-6 h-6 transition-colors ${carpet.isFavorite ? 'text-red-500 fill-current' : ''}`} />
+                    </button>
+                </div>
+                <p className="text-sm text-slate-600 dark:text-slate-400">{carpet.brand}</p>
+                <p className="text-lg font-semibold text-indigo-600 dark:text-indigo-400 mt-2">${carpet.price.toLocaleString()}</p>
+            </div>
+        </div>
     );
 };
 
 
-const Header = ({ title, searchQuery, setSearchQuery, currentView }: { title: string, searchQuery: string, setSearchQuery: (q: string) => void, currentView: string }) => {
-  const { t } = useSettings();
-  const showSearch = currentView === 'home' || currentView === 'favorites';
-  
-  const viewTitles: Record<string, string> = {
-    'home': t('app_title'),
-    'favorites': t('favorites'),
-    'add': t('add_new_carpet'),
-    'match': t('find_matching_carpet'),
-    'settings': t('settings'),
-  };
-
-  return e('header', { className: 'bg-zinc-100 dark:bg-zinc-900/50 backdrop-blur-lg px-4 pt-6 pb-4' },
-    e('h1', { className: 'text-3xl font-bold text-center mb-4 text-zinc-800 dark:text-zinc-100' }, viewTitles[currentView] || title),
-    showSearch && e('div', { className: 'relative' },
-      e(SearchIcon, { className: 'absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-400' }),
-      e('input', {
-        type: 'text',
-        value: searchQuery,
-        onChange: (ev: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(ev.target.value),
-        placeholder: t('search_placeholder'),
-        className: 'w-full p-3 pl-11 rounded-full bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 focus:outline-none focus:ring-2 focus:ring-amber-500',
-      }),
-      searchQuery && e('button', {
-        onClick: () => setSearchQuery(''),
-        className: 'absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700'
-      }, e(XMarkIcon, { className: 'h-5 w-5 text-zinc-500 dark:text-zinc-400' }))
-    )
-  );
-};
-
-const BottomNav = ({ currentView, setCurrentView }: { currentView: string, setCurrentView: (v: string) => void }) => {
-  const { t } = useSettings();
-  const navItems = [
-    { id: 'home', icon: HomeIcon, label: t('home') },
-    { id: 'favorites', icon: HeartIcon, label: t('favorites') },
-    { id: 'add', icon: PlusIcon, label: t('add_carpet') },
-    { id: 'match', icon: SearchIcon, label: t('find_match') },
-    { id: 'settings', icon: Cog6ToothIcon, label: t('settings') },
-  ];
-
-  const handleNavClick = (view: string) => {
-    triggerHapticFeedback();
-    setCurrentView(view);
-  };
-
-  return e('nav', { className: 'bg-white/80 dark:bg-zinc-900/80 backdrop-blur-lg border-t border-zinc-200 dark:border-zinc-800' },
-    e('div', { className: 'flex justify-around items-center h-16' },
-      ...navItems.map(item => {
-        const isActive = currentView === item.id;
-        if (item.id === 'add') {
-          return e('div', { key: 'add-wrapper', className: 'relative -mt-8' },
-            e('button', {
-              key: item.id,
-              onClick: () => handleNavClick(item.id),
-              'aria-label': item.label,
-              className: `w-16 h-16 flex items-center justify-center rounded-full bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-lg hover:shadow-xl hover:from-amber-600 transition-all duration-300 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 dark:focus:ring-offset-zinc-800`,
-            },
-              e(item.icon, { className: 'h-8 w-8' })
-            )
-          );
-        }
-        return e('button', {
-          key: item.id,
-          onClick: () => handleNavClick(item.id),
-          className: `flex flex-col items-center justify-center w-full h-full py-2 px-1 text-xs relative transition-colors ${isActive ? 'text-amber-600 dark:text-amber-400 font-semibold' : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'}`,
-        },
-          e(item.icon, { className: 'h-6 w-6 mb-1' }),
-          item.label,
-          isActive && e(motion.div, {
-            className: 'absolute bottom-0 h-1 w-6 bg-amber-500 rounded-full',
-            layoutId: 'active-nav-indicator',
-          })
-        );
-      })
-    )
-  );
-};
-
-const CarpetCard = ({ carpet, onCarpetClick }: { carpet: Carpet, onCarpetClick: (c: Carpet) => void }) => {
-    return e(motion.div, { 
-        className: 'bg-white dark:bg-zinc-800 rounded-xl shadow-md hover:shadow-xl transition-shadow duration-300 overflow-hidden cursor-pointer group',
-        onClick: () => onCarpetClick(carpet),
-        whileHover: { y: -5 },
-        whileTap: { scale: 0.98 },
-        layout: true,
-    },
-        e('div', {className: 'relative'},
-            e('img', { src: carpet.imageUrl, alt: carpet.name, className: 'w-full h-40 object-cover group-hover:scale-105 transition-transform duration-300' }),
-            carpet.isFavorite && e('div', { className: 'absolute top-2 right-2 bg-black/40 backdrop-blur-sm rounded-full p-1.5' }, e(HeartIcon, { className: 'h-5 w-5 text-red-400', fill: 'currentColor' }))
-        ),
-        e('div', { className: 'p-3' },
-            e('h3', { className: 'font-bold text-md text-zinc-800 dark:text-zinc-100 truncate' }, carpet.name),
-            e('p', { className: 'text-sm text-zinc-500 dark:text-zinc-400 truncate' }, carpet.brand)
-        )
-    );
-};
-
-const EmptyState = ({ icon, title, message, actionButton }: { icon: React.FC<any>, title: string, message: string, actionButton?: React.ReactNode }) => {
-    const IconComponent = icon;
-    return e('div', { className: 'flex flex-col h-full items-center justify-center text-center p-8' },
-        e('div', { className: 'relative flex items-center justify-center h-28 w-28 mb-6' },
-            e('div', { className: 'absolute -inset-2 bg-zinc-200 dark:bg-zinc-800 rounded-full opacity-50 blur-2xl' }),
-            e(IconComponent, { className: 'relative h-20 w-20 text-zinc-400 dark:text-zinc-600' })
-        ),
-        e('h2', { className: 'text-2xl font-bold mb-2 text-zinc-800 dark:text-zinc-100' }, title),
-        e('p', { className: 'text-zinc-500 dark:text-zinc-400 mb-6 max-w-xs' }, message),
-        actionButton
-    );
-};
-
-const CarpetGrid = ({ carpets, onCarpetClick, isFavorites = false, setCurrentView }: { carpets: Carpet[], onCarpetClick: (c: Carpet) => void, isFavorites?: boolean, setCurrentView?: (v: string) => void }) => {
-    const { t } = useSettings();
-
-    if (carpets.length === 0) {
-        if (isFavorites) {
-            return e(EmptyState, {
-                icon: HeartIcon,
-                title: t('no_favorites_found'),
-                message: t('empty_favorites_message')
-            });
-        }
-        return e(EmptyState, {
-            icon: SearchIcon,
-            title: t('no_carpets_found'),
-            message: t('empty_home_message'),
-            actionButton: setCurrentView && e('button', {
-                onClick: () => setCurrentView('add'),
-                className: 'px-6 py-3 rounded-full bg-amber-600 text-white font-semibold shadow-lg hover:bg-amber-700 transition-colors'
-            }, t('add_first_carpet'))
-        });
-    }
-    
-    return e('div', { className: 'grid grid-cols-2 md:grid-cols-3 gap-4' },
-        e(AnimatePresence, null, 
-          ...carpets.map(carpet => e(CarpetCard, { key: carpet.id, carpet, onCarpetClick }))
-        )
-    );
-};
-
-const ImageUploader = ({ onImageSelect, currentImageUrl }: { onImageSelect: (file: File) => void, currentImageUrl?: string | null }) => {
-    const { t } = useSettings();
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const [previewUrl, setPreviewUrl] = useState<string | null>(currentImageUrl || null);
-
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            const newUrl = URL.createObjectURL(file);
-            setPreviewUrl(newUrl);
-            onImageSelect(file);
-        }
-    };
-    
-    const handleDrop = (e: React.DragEvent) => {
-        e.preventDefault();
-        const file = e.dataTransfer.files?.[0];
-        if (file && file.type.startsWith('image/')) {
-            const newUrl = URL.createObjectURL(file);
-            setPreviewUrl(newUrl);
-            onImageSelect(file);
-        }
-    };
-
-    return e('div', { className: 'mt-4' },
-        e('label', { className: 'block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2' }, t('carpet_image')),
-        e('div', {
-            className: `mt-1 flex justify-center items-center px-6 pt-5 pb-6 border-2 border-zinc-300 dark:border-zinc-600 border-dashed rounded-md transition-colors hover:border-amber-500 dark:hover:border-amber-500 cursor-pointer ${previewUrl ? 'h-48 p-2' : 'h-32'}`,
-            onClick: () => fileInputRef.current?.click(),
-            onDrop: handleDrop,
-            onDragOver: (e: React.DragEvent) => e.preventDefault(),
-        },
-            e('input', { ref: fileInputRef, type: 'file', accept: 'image/*', className: 'hidden', onChange: handleFileChange }),
-            previewUrl ? 
-                e('img', { src: previewUrl, alt: 'Carpet preview', className: 'h-full w-full object-contain rounded-md' }) :
-                e('div', { className: 'space-y-1 text-center' },
-                    e(CameraIcon, { className: 'mx-auto h-12 w-12 text-zinc-400' }),
-                    e('p', { className: 'text-sm text-zinc-600 dark:text-zinc-400' }, t('drop_image_here'))
-                )
-        )
-    );
-};
-
-const FormInput = ({ label, name, value, onChange, placeholder = '', type = 'text', required = false }: { label: string, name: string, value: any, onChange: any, placeholder?: string, type?: string, required?: boolean }) => {
-    const { t } = useSettings();
-    const InputComponent = type === 'textarea' ? 'textarea' : 'input';
-
-    return e('div', { className: 'mb-4' },
-        e('label', { htmlFor: name, className: 'block text-sm font-medium text-zinc-700 dark:text-zinc-300' }, `${label}${required ? ' *' : ''}`),
-        e(InputComponent, {
-            id: name,
-            name: name,
-            type: type,
-            value: value,
-            onChange: onChange,
-            placeholder: placeholder || label,
-            required: required,
-            rows: type === 'textarea' ? 4 : undefined,
-            className: `mt-1 block w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-md shadow-sm placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 sm:text-sm ${type === 'textarea' ? 'min-h-[100px]' : ''}`,
-        }),
-        required && !value && e('p', { className: 'text-xs text-red-500 mt-1' }, t('required_field'))
-    );
-};
-
-const MultiTagInput = ({ label, values, onValuesChange, placeholder, options }: { label: string, values: string[], onValuesChange: (newValues: string[]) => void, placeholder: string, options?: string[] }) => {
-    const { t } = useSettings();
-    const [inputValue, setInputValue] = useState('');
-
-    const handleAdd = () => {
-        const valueToAdd = inputValue.trim();
-        if (valueToAdd && !values.includes(valueToAdd)) {
-            triggerHapticFeedback();
-            onValuesChange([...values, valueToAdd]);
-            setInputValue(''); // Reset for next input
-        }
-    };
-    
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            handleAdd();
-        }
-    };
-
-    const handleRemove = (valueToRemove: string) => {
-        onValuesChange(values.filter(v => v !== valueToRemove));
-    };
-
-    const inputArea = options ?
-        e('select', {
-            value: inputValue,
-            onChange: (e: React.ChangeEvent<HTMLSelectElement>) => setInputValue(e.target.value),
-            className: 'flex-grow p-2 bg-white dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700 rounded-l-md focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 sm:text-sm',
-        },
-            e('option', { value: "" }, placeholder),
-            ...options.map(opt => e('option', { key: opt, value: opt }, opt))
-        ) :
-        e('input', {
-            type: 'text',
-            value: inputValue,
-            onChange: (e: React.ChangeEvent<HTMLInputElement>) => setInputValue(e.target.value),
-            onKeyDown: handleKeyDown,
-            placeholder: placeholder,
-            className: 'flex-grow p-2 bg-white dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700 rounded-l-md focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 sm:text-sm',
-        });
-        
-    return e('div', { className: 'mb-4' },
-        e('label', { className: 'block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1' }, label),
-        e('div', { className: 'flex flex-wrap gap-2 p-2 min-h-[44px] bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-md' },
-            ...values.map(value => e('span', {
-                key: value,
-                className: 'flex items-center bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200 text-sm font-medium px-2.5 py-1 rounded-full'
-            },
-                value,
-                e('button', {
-                    type: 'button',
-                    onClick: () => handleRemove(value),
-                    className: 'ml-2 text-amber-600 dark:text-amber-300 hover:text-amber-800 dark:hover:text-amber-100'
-                }, e(XMarkIcon, { className: 'h-4 w-4' }))
-            ))
-        ),
-        e('div', { className: 'flex mt-2' },
-            inputArea,
-            e('button', {
-                type: 'button',
-                onClick: handleAdd,
-                className: 'px-4 py-2 bg-zinc-200 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-200 rounded-r-md hover:bg-zinc-300 dark:hover:bg-zinc-600'
-            }, t('add'))
-        )
-    );
-};
-
-
-const Modal = ({ isOpen, onClose, children }: { isOpen: boolean, onClose: () => void, children?: React.ReactNode }) => {
-    return e(AnimatePresence, null,
-        isOpen && e(motion.div, {
-            className: 'fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4',
-            initial: { opacity: 0 },
-            animate: { opacity: 1 },
-            exit: { opacity: 0 },
-            onClick: onClose,
-        },
-            e(motion.div, {
-                className: 'bg-white dark:bg-zinc-900 rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto',
-                initial: { scale: 0.9, opacity: 0 },
-                animate: { scale: 1, opacity: 1 },
-                exit: { scale: 0.9, opacity: 0 },
-                transition: { type: 'spring', stiffness: 300, damping: 30 },
-                onClick: (evt: React.MouseEvent) => evt.stopPropagation(),
-            }, children)
-        )
-    );
-};
-
-const InfoModal = ({ title, message, isOpen, onClose }: { title: string, message: string, isOpen: boolean, onClose: () => void }) => {
-    const { t } = useSettings();
-
-    return e(Modal, { isOpen: isOpen, onClose: onClose },
-        e('div', { className: 'p-6' },
-            e('h2', { className: 'text-xl font-bold mb-4 text-zinc-800 dark:text-zinc-100' }, title),
-            e('p', { className: 'mb-6 text-zinc-600 dark:text-zinc-400' }, message),
-            e('div', { className: 'flex justify-end space-x-4' },
-                e('button', {
-                    onClick: onClose,
-                    className: 'px-4 py-2 rounded-md bg-amber-600 text-white font-semibold hover:bg-amber-700'
-                }, t('ok'))
-            )
-        )
-    );
-};
-
-
-const CarpetDetailModal = ({ carpet, onClose, onUpdate, onDelete, onToggleFavorite }: { carpet: Carpet | null, onClose: () => void, onUpdate: (c: Carpet) => void, onDelete: (id: string) => void, onToggleFavorite: (id: string) => void }) => {
-    const { t } = useSettings();
-    const [activeTab, setActiveTab] = useState<'details' | 'edit'>('details');
-    const [editedCarpet, setEditedCarpet] = useState<Carpet | null>(carpet);
-
-    useEffect(() => {
-        setEditedCarpet(carpet);
-        if (carpet) {
-            setActiveTab('details'); // Reset tab to details when a new carpet is selected or modal opens
-        }
-    }, [carpet]);
-
-    if (!carpet) return null;
-    const currentCarpet = editedCarpet || carpet;
-
-
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-        const { name, value } = e.target;
-        setEditedCarpet(prev => prev ? { ...prev, [name]: name === 'price' ? Number(value) : value } : null);
-    };
-
-    const handleSave = () => {
-        if (editedCarpet) {
-            triggerHapticFeedback('medium');
-            onUpdate(editedCarpet);
-            setActiveTab('details');
-        }
-    };
-    
-    const handleDelete = () => {
-        if (window.confirm(t('delete_carpet_confirm'))) {
-            triggerHapticFeedback('heavy');
-            onDelete(carpet.id);
-        }
-    };
-
-    const handleToggleFavorite = () => {
-        triggerHapticFeedback();
-        onToggleFavorite(carpet.id);
-    };
-
-    const renderDetail = (label: string, value?: string | number | string[]) => {
-        const displayValue = Array.isArray(value) ? (value.length > 0 ? value.join(', ') : 'N/A') : (value || 'N/A');
-        return e('div', { key: label, className: 'py-3 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center' },
-            e('p', { className: 'text-sm font-medium text-zinc-500 dark:text-zinc-400' }, label),
-            e('p', { className: 'text-md text-zinc-800 dark:text-zinc-200 text-right' }, displayValue)
-        );
-    }
-    
-    const detailFields = [
-        { label: t('brand'), value: carpet.brand },
-        { label: t('model'), value: carpet.model },
-        { label: t('price'), value: `${carpet.price} TL` },
-        { label: t('sizes'), value: carpet.size },
-        { label: t('pattern'), value: carpet.pattern },
-        { label: t('texture'), value: carpet.texture },
-        { label: t('yarn_types'), value: carpet.yarnType },
-        { label: t('type'), value: carpet.type },
-        { label: t('barcode_id'), value: carpet.barcodeId },
-        { label: t('qr_code_id'), value: carpet.qrCodeId },
-        { label: t('created_at'), value: new Date(carpet.createdAt).toLocaleDateString() },
-    ];
-    
-    const editFields = [
-        { name: 'brand', label: t('brand'), type: 'text' },
-        { name: 'model', label: t('model'), type: 'text' },
-        { name: 'price', label: t('price'), type: 'number' },
-        { name: 'pattern', label: t('pattern'), type: 'text' },
-        { name: 'texture', label: t('texture'), type: 'text' },
-        { name: 'type', label: t('type'), type: 'text' },
-        { name: 'barcodeId', label: t('barcode_id'), type: 'text' },
-        { name: 'qrCodeId', label: t('qr_code_id'), type: 'text' },
-    ];
-    
-    const TabButton = ({ label, isActive, onClick }: { label: string, isActive: boolean, onClick: () => void }) => {
-        return e('button', {
-            onClick,
-            className: `px-4 py-2 text-sm font-medium transition-colors ${isActive ? 'text-amber-600 dark:text-amber-400 border-b-2 border-amber-500' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`
-        }, label);
-    };
-
-    return e(Modal, { isOpen: !!carpet, onClose },
-        e('div', { className: 'relative' },
-            e('img', { src: carpet.imageUrl, alt: carpet.name, className: 'w-full h-64 object-cover' }),
-            e('button', { onClick: onClose, className: 'absolute top-3 right-3 p-2 bg-black/50 rounded-full' }, e(XMarkIcon, { className: 'h-6 w-6 text-white' })),
-            e('div', { className: 'p-6' },
-                e('div', { className: 'flex justify-between items-start mb-4' },
-                    activeTab === 'edit' ?
-                        e(FormInput, { label: t('name'), name: 'name', value: currentCarpet.name, onChange: handleChange, required: true }) :
-                        e('h2', { className: 'text-2xl font-bold' }, carpet.name),
-                    e('button', { onClick: handleToggleFavorite, className: 'p-2 rounded-full hover:bg-red-500/10' }, 
-                        e(HeartIcon, { className: `h-8 w-8 transition-colors ${carpet.isFavorite ? 'text-red-500' : 'text-zinc-400'}`, fill: carpet.isFavorite ? 'currentColor' : 'none' })
-                    )
-                ),
-                e('div', { className: 'border-b border-zinc-200 dark:border-zinc-800 mb-4' },
-                    e('div', { className: 'flex space-x-4' },
-                        e(TabButton, { label: t('description'), isActive: activeTab === 'details', onClick: () => setActiveTab('details') }),
-                        e(TabButton, { label: t('edit'), isActive: activeTab === 'edit', onClick: () => setActiveTab('edit') })
-                    )
-                ),
-                activeTab === 'edit' ? (
-                    e('div', null, 
-                        ...editFields.map(f => e(FormInput, { key: f.name, ...f, value: currentCarpet[f.name as keyof Carpet], onChange: handleChange })),
-                        e(MultiTagInput, {
-                            label: t('sizes'),
-                            values: currentCarpet.size,
-                            onValuesChange: (newSizes: string[]) => setEditedCarpet(prev => prev ? { ...prev, size: newSizes } : null),
-                            placeholder: t('enter_custom_size'),
-                        }),
-                        e('div', { className: 'flex flex-wrap gap-2 my-2' },
-                            ...STANDARD_CARPET_SIZES.map(s => e('button', {
-                                type: 'button',
-                                onClick: () => {
-                                    if (!currentCarpet.size.includes(s)) {
-                                        setEditedCarpet(prev => prev ? { ...prev, size: [...prev.size, s] } : null);
-                                    }
-                                },
-                                className: 'px-2 py-1 text-xs bg-zinc-200 dark:bg-zinc-700 rounded'
-                            }, `+ ${s}`))
-                        ),
-                         e(MultiTagInput, {
-                            label: t('yarn_types'),
-                            values: currentCarpet.yarnType,
-                            onValuesChange: (newYarns: string[]) => setEditedCarpet(prev => prev ? { ...prev, yarnType: newYarns } : null),
-                            placeholder: t('select_yarn_type'),
-                            options: STANDARD_YARN_TYPES
-                        }),
-                        e(FormInput, { label: t('description'), name: 'description', value: currentCarpet.description, onChange: handleChange, type: 'textarea' }),
-                    )
-                ) : (
-                    e(React.Fragment, null,
-                        e('p', { className: 'text-zinc-600 dark:text-zinc-400 mb-4' }, carpet.description),
-                        e('div', { className: 'space-y-2' },
-                            ...detailFields.map(f => renderDetail(f.label, f.value))
-                        )
-                    )
-                ),
-                e('div', { className: 'mt-6 flex justify-between' },
-                    e('button', { onClick: handleDelete, className: 'px-4 py-2 rounded-md bg-red-500/10 text-red-500 hover:bg-red-500/20 flex items-center font-semibold' },
-                        e(TrashIcon, { className: 'h-5 w-5 mr-2' }),
-                        t('delete')
-                    ),
-                    activeTab === 'edit' && e('div', { className: 'flex space-x-2' },
-                        e('button', { onClick: () => setActiveTab('details'), className: 'px-4 py-2 rounded-md bg-zinc-200 dark:bg-zinc-700 font-semibold' }, t('cancel')),
-                        e('button', { onClick: handleSave, className: 'px-6 py-2 rounded-md bg-amber-600 text-white font-semibold shadow-sm hover:bg-amber-700' }, t('save_changes'))
-                    )
-                )
-            )
-        )
-    );
-};
-
-const AddCarpetView = ({ onCarpetAdded }: { onCarpetAdded: () => void }) => {
-    const { t } = useSettings();
-    const { addCarpet, getDetailsFromImage } = useCarpets();
-    const [carpetData, setCarpetData] = useState<Partial<Carpet>>({ name: '', brand: '', model: '', price: 0, size: [], pattern: '', texture: '', yarnType: [], type: '', description: '', barcodeId: '', qrCodeId: '' });
-    const [imageFile, setImageFile] = useState<File | null>(null);
-    const [isAiLoading, setIsAiLoading] = useState(false);
-    const [isSaving, setIsSaving] = useState(false);
-    const [error, setError] = useState('');
-    const [isBarcodeScannerOpen, setIsBarcodeScannerOpen] = useState(false);
-    const [barcodeScanType, setBarcodeScanType] = useState<'barcode' | 'qr_code'>('barcode');
-    const [infoModal, setInfoModal] = useState<{ isOpen: boolean; title: string; message: string; }>({ isOpen: false, title: '', message: '' });
-
-
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-        const { name, value } = e.target;
-        setCarpetData(prev => ({ ...prev, [name]: name === 'price' ? Number(value) : value }));
-    };
-
-    const handleImageSelect = (file: File) => {
-        setImageFile(file);
-    };
-
-    const handleAiScan = async () => {
-        if (!imageFile) {
-            setError(t('carpet_image') + ' ' + t('required_field').toLowerCase());
-            return;
-        }
-        setError('');
-        setIsAiLoading(true);
-        try {
-            const details = await getDetailsFromImage(imageFile);
-            setCarpetData(prev => ({ ...prev, ...details }));
-        } catch (err: any) {
-            console.error("AI Scan Error:", err);
-            setInfoModal({
-                isOpen: true,
-                title: t('ai_analysis_error'),
-                message: err.message,
-            });
-        } finally {
-            setIsAiLoading(false);
-        }
-    };
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!imageFile || !carpetData.name) {
-            setError(`${t('carpet_image')} and ${t('name')} are required.`);
-            return;
-        }
-        setError('');
-        setIsSaving(true);
-        try {
-            await addCarpet(carpetData, imageFile);
-            onCarpetAdded(); // Switch view
-        } catch (err) {
-            setError("Failed to save carpet. Please try again.");
-            console.error(err);
-        } finally {
-            setIsSaving(false);
-        }
-    };
-    
-    const openBarcodeScanner = (type: 'barcode' | 'qr_code') => {
-        setBarcodeScanType(type);
-        setIsBarcodeScannerOpen(true);
-    };
-
-    const handleScanSuccess = (value: string) => {
-        if(barcodeScanType === 'barcode') {
-            setCarpetData(prev => ({ ...prev, barcodeId: value }));
-        } else {
-            setCarpetData(prev => ({ ...prev, qrCodeId: value }));
-        }
-        setIsBarcodeScannerOpen(false);
-    };
-    
-    return e('div', { className: 'p-4' },
-        e(InfoModal, {
-            isOpen: infoModal.isOpen,
-            title: infoModal.title,
-            message: infoModal.message,
-            onClose: () => setInfoModal({ isOpen: false, title: '', message: '' })
-        }),
-        isBarcodeScannerOpen && e(BarcodeScannerModal, {
-            onScanSuccess: handleScanSuccess,
-            onClose: () => setIsBarcodeScannerOpen(false),
-            scanType: barcodeScanType,
-        }),
-        e('form', { onSubmit: handleSubmit, className: 'space-y-4' },
-            e(ImageUploader, { onImageSelect: handleImageSelect }),
-            e('button', {
-                type: 'button',
-                onClick: handleAiScan,
-                disabled: isAiLoading || !imageFile,
-                className: 'w-full flex items-center justify-center px-4 py-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-gradient-to-br from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:from-purple-300 disabled:to-indigo-300 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500',
-            },
-                isAiLoading ? e(Spinner, { className: 'animate-spin -ml-1 mr-3 h-5 w-5' }) : e(WandSparkles, { className: '-ml-1 mr-2 h-5 w-5' }),
-                isAiLoading ? t('analyzing_image') : t('scan_with_ai')
-            ),
-            error && e('p', { className: 'text-red-500 text-sm' }, error),
-            e(FormInput, { label: t('name'), name: 'name', value: carpetData.name, onChange: handleChange, required: true }),
-            e(FormInput, { label: t('brand'), name: 'brand', value: carpetData.brand, onChange: handleChange }),
-            e(FormInput, { label: t('model'), name: 'model', value: carpetData.model, onChange: handleChange }),
-            e(FormInput, { label: t('price'), name: 'price', value: carpetData.price, onChange: handleChange, type: 'number' }),
-            
-            e(MultiTagInput, {
-                label: t('sizes'),
-                values: carpetData.size || [],
-                onValuesChange: (newSizes) => setCarpetData(prev => ({ ...prev, size: newSizes })),
-                placeholder: t('enter_custom_size')
-            }),
-            e('div', { className: 'flex flex-wrap gap-2 -mt-2 mb-2' },
-                ...STANDARD_CARPET_SIZES.map(s => e('button', {
-                    type: 'button',
-                    key: s,
-                    onClick: () => {
-                        if (!carpetData.size?.includes(s)) {
-                           setCarpetData(prev => ({ ...prev, size: [...(prev.size || []), s]}));
-                        }
-                    },
-                    className: 'px-2 py-1 text-xs bg-zinc-200 dark:bg-zinc-700 rounded-md hover:bg-zinc-300 dark:hover:bg-zinc-600'
-                }, `+ ${s}`))
-            ),
-
-            e(MultiTagInput, {
-                label: t('yarn_types'),
-                values: carpetData.yarnType || [],
-                onValuesChange: (newYarns) => setCarpetData(prev => ({ ...prev, yarnType: newYarns })),
-                placeholder: t('select_yarn_type'),
-                options: STANDARD_YARN_TYPES
-            }),
-            
-            e(FormInput, { label: t('pattern'), name: 'pattern', value: carpetData.pattern, onChange: handleChange }),
-            e(FormInput, { label: t('texture'), name: 'texture', value: carpetData.texture, onChange: handleChange }),
-            e(FormInput, { label: t('type'), name: 'type', value: carpetData.type, onChange: handleChange }),
-            e(FormInput, { label: t('description'), name: 'description', value: carpetData.description, onChange: handleChange, type: 'textarea' }),
-            
-             e('div', { className: 'flex space-x-2' },
-                e(FormInput, { label: t('barcode_id'), name: 'barcodeId', value: carpetData.barcodeId, onChange: handleChange }),
-                e('button', { type: 'button', onClick: () => openBarcodeScanner('barcode'), className: 'mt-6 p-2 bg-zinc-200 dark:bg-zinc-700 rounded-md' }, e(BarcodeIcon, {className: 'h-6 w-6'}))
-            ),
-             e('div', { className: 'flex space-x-2' },
-                e(FormInput, { label: t('qr_code_id'), name: 'qrCodeId', value: carpetData.qrCodeId, onChange: handleChange }),
-                e('button', { type: 'button', onClick: () => openBarcodeScanner('qr_code'), className: 'mt-6 p-2 bg-zinc-200 dark:bg-zinc-700 rounded-md' }, e(QrCodeIcon, {className: 'h-6 w-6'}))
-            ),
-
-            e('button', {
-                type: 'submit',
-                disabled: isSaving,
-                className: 'w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500'
-            },
-                isSaving ? e(Spinner, { className: 'animate-spin -ml-1 mr-3 h-5 w-5' }) : null,
-                t('add_new_carpet')
-            )
-        )
-    );
-};
-
-const MatchCarpetView = () => {
-    const { t } = useSettings();
-    const { findMatchByImage } = useCarpets();
-    const [imageFile, setImageFile] = useState<File | null>(null);
-    const [isLoading, setIsLoading] = useState(false);
-    const [result, setResult] = useState<'found' | 'not_found' | null>(null);
-    const [matchedCarpet, setMatchedCarpet] = useState<Carpet | null>(null);
-    const [detailModalCarpet, setDetailModalCarpet] = useState<Carpet | null>(null);
-    const [infoModal, setInfoModal] = useState<{ isOpen: boolean; title: string; message: string; }>({ isOpen: false, title: '', message: '' });
-
-
-    const handleImageSelect = (file: File) => {
-        setImageFile(file);
-        setResult(null);
-        setMatchedCarpet(null);
-    };
-
-    const handleMatchSearch = async () => {
-        if (!imageFile) return;
-        setIsLoading(true);
-        setResult(null);
-        setMatchedCarpet(null);
-        try {
-            const match = await findMatchByImage(imageFile);
-            if (match) {
-                setResult('found');
-                setMatchedCarpet(match);
-            } else {
-                setResult('not_found');
-            }
-        } catch (err: any) {
-             setInfoModal({
-                isOpen: true,
-                title: t('ai_match_error'),
-                message: err.message,
-            });
-        } finally {
-            setIsLoading(false);
-        }
-    };
-    
-    // Dummy functions for modal compatibility
-    const handleUpdate = () => {};
-    const handleDelete = () => {};
-    const handleToggleFavorite = () => {};
-
-    return e('div', { className: 'p-4' },
-         e(InfoModal, {
-            isOpen: infoModal.isOpen,
-            title: infoModal.title,
-            message: infoModal.message,
-            onClose: () => setInfoModal({ isOpen: false, title: '', message: '' })
-        }),
-        e(ImageUploader, { onImageSelect: handleImageSelect }),
-        e('button', {
-            type: 'button',
-            onClick: handleMatchSearch,
-            disabled: isLoading || !imageFile,
-            className: 'mt-4 w-full flex items-center justify-center px-4 py-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500',
-        },
-            isLoading ? e(Spinner, { className: 'animate-spin -ml-1 mr-3 h-5 w-5' }) : e(SearchIcon, { className: '-ml-1 mr-2 h-5 w-5' }),
-            isLoading ? t('searching_for_match') : t('find_match')
-        ),
-
-        result && e('div', { className: 'mt-6 text-center' },
-            result === 'found' && matchedCarpet ? (
-                e(motion.div, { initial: {opacity: 0, y: 20}, animate: {opacity: 1, y: 0}},
-                    e('div', {className: 'flex items-center justify-center gap-2 text-lg font-medium text-green-600 dark:text-green-400'}, 
-                        e(CheckCircleIcon, {className: 'h-6 w-6'}), 
-                        e('h3', null, t('match_found'))
-                    ),
-                    e('div', { className: 'mt-4 max-w-xs mx-auto' }, 
-                        e(CarpetCard, { carpet: matchedCarpet, onCarpetClick: () => setDetailModalCarpet(matchedCarpet) })
-                    )
-                )
-            ) : (
-                 e(motion.div, { initial: {opacity: 0, y: 20}, animate: {opacity: 1, y: 0}},
-                    e('div', {className: 'flex items-center justify-center gap-2 text-lg font-medium text-orange-600 dark:text-orange-400'}, 
-                        e(XCircleIcon, {className: 'h-6 w-6'}),
-                        e('h3', null, t('no_match_found'))
-                    )
-                 )
-            )
-        ),
-        
-        detailModalCarpet && e(CarpetDetailModal, {
-            carpet: detailModalCarpet,
-            onClose: () => setDetailModalCarpet(null),
-            onUpdate: handleUpdate,
-            onDelete: handleDelete,
-            onToggleFavorite: handleToggleFavorite,
-        })
-    );
-};
-
-const SettingsView = () => {
-    const { language, setLanguage, theme, setTheme, t } = useSettings();
-    const { carpets, replaceAllCarpets } = useCarpets();
-    const toast = useToast();
-    const importInputRef = useRef<HTMLInputElement>(null);
-
-    const handleExport = () => {
-        try {
-            const dataStr = JSON.stringify(carpets, null, 2);
-            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-            
-            const exportFileDefaultName = 'carpet_catalog_export.json';
-            
-            const linkElement = document.createElement('a');
-            linkElement.setAttribute('href', dataUri);
-            linkElement.setAttribute('download', exportFileDefaultName);
-            linkElement.click();
-            toast.addToast(t('export_success'), 'success');
-        } catch (err) {
-            console.error("Export failed", err);
-            toast.addToast(t('export_error'), 'error');
-        }
-    };
-    
-    const handleImport = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-            try {
-                const text = e.target?.result;
-                if (typeof text !== 'string') throw new Error("File could not be read");
-                const importedCarpets = JSON.parse(text);
-                await replaceAllCarpets(importedCarpets);
-                toast.addToast(t('import_success'), 'success');
-            } catch (err) {
-                console.error("Import failed", err);
-                toast.addToast(t('import_error'), 'error');
-            }
-        };
-        reader.readAsText(file);
-    };
-
-    const SettingsSection = ({ title, children }: { title: string, children?: React.ReactNode }) =>
-        e('div', { className: 'mb-8' },
-            e('h3', { className: 'text-xl font-bold text-zinc-800 dark:text-zinc-200 border-b border-zinc-300 dark:border-zinc-700 pb-3 mb-4' }, title),
-            children
-        );
-        
-    const SettingsItem = ({ label, children }: { label: string, children?: React.ReactNode }) =>
-        e('div', { className: 'flex items-center justify-between py-4' },
-            e('label', { className: 'text-md text-zinc-800 dark:text-zinc-200' }, label),
-            children
-        );
-
-    return e('div', { className: 'space-y-6 p-4' },
-        e(SettingsSection, { title: t('language') },
-            e(SettingsItem, { label: t('language') },
-                e('select', { 
-                    value: language, 
-                    onChange: (ev: React.ChangeEvent<HTMLSelectElement>) => setLanguage(ev.target.value as 'en' | 'tr'),
-                    className: 'p-2 rounded-md bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 focus:outline-none focus:ring-2 focus:ring-amber-500'
-                },
-                    e('option', { value: 'tr' }, 'Türkçe'),
-                    e('option', { value: 'en' }, 'English')
-                )
-            )
-        ),
-        e(SettingsSection, { title: t('theme') },
-            e(SettingsItem, { label: t('theme') },
-                e('div', { className: 'flex space-x-2' },
-                    e('button', { 
-                        onClick: () => setTheme('light'),
-                        className: `px-4 py-2 rounded-md ${theme === 'light' ? 'bg-amber-600 text-white' : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-200'}`
-                    }, t('light')),
-                    e('button', { 
-                        onClick: () => setTheme('dark'),
-                        className: `px-4 py-2 rounded-md ${theme === 'dark' ? 'bg-amber-600 text-white' : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-200'}`
-                    }, t('dark'))
-                )
-            )
-        ),
-        e(SettingsSection, { title: t('data_management') },
-            e('div', { className: 'flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4' },
-                e('input', { ref: importInputRef, type: 'file', accept: '.json', className: 'hidden', onChange: handleImport }),
-                e('button', { 
-                    onClick: () => importInputRef.current?.click(),
-                    className: 'w-full flex items-center justify-center px-4 py-3 rounded-md bg-zinc-200 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 font-medium text-zinc-800 dark:text-zinc-200'
-                }, e(ArrowDownTrayIcon, { className: 'h-5 w-5 mr-2' }), t('import_data')),
-                e('button', { 
-                    onClick: handleExport,
-                    className: 'w-full flex items-center justify-center px-4 py-3 rounded-md bg-zinc-200 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 font-medium text-zinc-800 dark:text-zinc-200'
-                }, e(ArrowUpTrayIcon, { className: 'h-5 w-5 mr-2' }), t('export_data'))
-            )
-        )
-    );
-};
-
-const Toast = ({ message, type, onRemove }: { message: string, type: 'success' | 'error', onRemove: () => void }) => {
-    const isSuccess = type === 'success';
-    const Icon = isSuccess ? CheckCircleIcon : XCircleIcon;
-
-    useEffect(() => {
-        const timer = setTimeout(onRemove, 3000);
-        return () => clearTimeout(timer);
-    }, [onRemove]);
-    
-    return e(motion.div, {
-        className: `flex items-center w-full max-w-sm p-4 rounded-lg shadow-lg text-white ${isSuccess ? 'bg-green-500' : 'bg-red-500'}`,
-        layout: true,
-        initial: { opacity: 0, y: -50, scale: 0.3 },
-        animate: { opacity: 1, y: 0, scale: 1 },
-        exit: { opacity: 0, scale: 0.5, transition: { duration: 0.2 } },
-    },
-        e(Icon, { className: 'h-6 w-6' }),
-        e('div', { className: 'ml-3 text-sm font-medium' }, message),
-        e('button', { onClick: onRemove, className: 'ml-auto -mx-1.5 -my-1.5 p-1.5 rounded-full inline-flex hover:bg-white/20' }, e(XMarkIcon, { className: 'h-5 w-5' }))
-    );
-};
-
-const ToastContainer = () => {
-    const { toasts, removeToast } = useToast();
-    return e('div', { className: 'fixed top-5 left-1/2 -translate-x-1/2 z-[200] w-full max-w-sm flex flex-col items-center space-y-2' },
-        e(AnimatePresence, null, 
-            ...toasts.map(toast => e(Toast, {
-                key: toast.id,
-                ...toast,
-                onRemove: () => removeToast(toast.id)
-            }))
-        )
-    );
-};
+// --- Main App ---
 
 function App() {
-  const { carpets, loading, error: dbError, toggleFavorite, updateCarpet, deleteCarpet } = useCarpets();
-  const { t } = useSettings();
-  const [currentView, setCurrentView] = useState('home');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCarpet, setSelectedCarpet] = useState<Carpet | null>(null);
+  const { carpets, loading, error, toggleFavorite, deleteCarpet, addCarpet, updateCarpet, getDetailsFromImage, findMatchByImage, replaceAllCarpets } = useCarpets();
+  const { t, language, setLanguage, theme, setTheme } = useSettings();
+  const { addToast, toasts, removeToast } = useToast();
 
-  const handleCarpetClick = (carpet: Carpet) => {
-    setSelectedCarpet(carpet);
-  };
-  
-  const handleCloseModal = () => {
-    setSelectedCarpet(null);
-  };
+  const [activePage, setActivePage] = useState<Page>('home');
+  const [modal, setModal] = useState<Modal>(null);
+  const [selectedCarpet, setSelectedCarpet] = useState<Carpet | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [matchResult, setMatchResult] = useState<Carpet | 'not-found' | null>(null);
+  const [isMatching, setIsMatching] = useState(false);
+
+  // File input refs for import/export
+  const importFileRef = useRef<HTMLInputElement>(null);
 
   const filteredCarpets = useMemo(() => {
-    const lowerCaseQuery = searchQuery.toLowerCase();
-    return carpets.filter(c => 
-      c.name.toLowerCase().includes(lowerCaseQuery) ||
-      c.brand.toLowerCase().includes(lowerCaseQuery) ||
-      c.model.toLowerCase().includes(lowerCaseQuery) ||
-      c.barcodeId?.includes(lowerCaseQuery) ||
-      c.qrCodeId?.includes(lowerCaseQuery)
+    const source = activePage === 'favorites' ? carpets.filter(c => c.isFavorite) : carpets;
+    if (!searchQuery) return source;
+    return source.filter(c =>
+      c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.model.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.barcodeId?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.qrCodeId?.toLowerCase().includes(searchQuery.toLowerCase())
     );
-  }, [searchQuery, carpets]);
+  }, [carpets, searchQuery, activePage]);
 
-  const favoriteCarpets = useMemo(() => filteredCarpets.filter(c => c.isFavorite), [filteredCarpets]);
+  const openModal = useCallback((type: Modal, carpet?: Carpet) => {
+    if (carpet) setSelectedCarpet(carpet);
+    setModal(type);
+  }, []);
 
-  const pageVariants = {
-    initial: { opacity: 0, x: 20 },
-    in: { opacity: 1, x: 0 },
-    out: { opacity: 0, x: -20 },
+  const closeModal = useCallback(() => {
+    setModal(null);
+    setSelectedCarpet(null);
+    setMatchResult(null);
+  }, []);
+
+  const handleDelete = useCallback(() => {
+    if (selectedCarpet) {
+      deleteCarpet(selectedCarpet.id);
+      addToast(t('Carpet deleted successfully'), 'success'); // Assuming key exists
+      closeModal();
+    }
+  }, [selectedCarpet, deleteCarpet, addToast, t, closeModal]);
+
+  const handleFindMatch = useCallback(async (file: File) => {
+    setIsMatching(true);
+    try {
+        const result = await findMatchByImage(file);
+        setMatchResult(result ?? 'not-found');
+        openModal('match-result');
+    } catch (e: any) {
+        addToast(e.message || t('ai_match_error'), 'error');
+    } finally {
+        setIsMatching(false);
+    }
+  }, [findMatchByImage, addToast, t, openModal]);
+  
+  const handleExport = useCallback(() => {
+      try {
+        const dataStr = JSON.stringify(carpets, null, 2);
+        const dataBlob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(dataBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `carpet-catalog-backup-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        addToast(t('export_success'), 'success');
+      } catch (e) {
+        addToast(t('export_error'), 'error');
+      }
+  }, [carpets, addToast, t]);
+
+  const handleImportClick = () => {
+    importFileRef.current?.click();
   };
 
-  const pageTransition = {
-    type: "tween",
-    ease: "anticipate",
-    duration: 0.4
-  };
+  const handleImport = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            const content = e.target?.result;
+            if (typeof content !== 'string') throw new Error('Invalid file content');
+            const newCarpets = JSON.parse(content);
+            await replaceAllCarpets(newCarpets);
+            addToast(t('import_success'), 'success');
+        } catch (err) {
+            addToast(t('import_error'), 'error');
+        }
+    };
+    reader.readAsText(file);
+    if (event.target) event.target.value = '';
+  }, [replaceAllCarpets, addToast, t]);
+
 
   const renderContent = () => {
-    if (loading) return e('div', { className: 'flex justify-center items-center h-64' }, e(Spinner, { className: 'h-8 w-8 animate-spin' }));
-    if (dbError) return e('p', { className: 'text-center text-red-500' }, dbError);
+    if (loading) return <div className="flex justify-center items-center h-full pt-20"><Spinner className="w-12 h-12 animate-spin text-indigo-500" /></div>;
+    if (error) return <div className="text-center text-red-500 pt-20">{error}</div>;
 
-    let content;
-    switch(currentView) {
-      case 'home':
-        content = e(CarpetGrid, { carpets: filteredCarpets, onCarpetClick: handleCarpetClick, setCurrentView: setCurrentView });
-        break;
-      case 'favorites':
-        content = e(CarpetGrid, { carpets: favoriteCarpets, onCarpetClick: handleCarpetClick, isFavorites: true });
-        break;
-      case 'add':
-        content = e(AddCarpetView, { onCarpetAdded: () => setCurrentView('home') });
-        break;
-      case 'match':
-          content = e(MatchCarpetView, null);
-          break;
-      case 'settings':
-        content = e(SettingsView, null);
-        break;
-      default:
-        content = e(CarpetGrid, { carpets, onCarpetClick: handleCarpetClick });
+    const hasResults = filteredCarpets.length > 0;
+    const isFavoritesPage = activePage === 'favorites';
+
+    if (!hasResults && searchQuery) {
+        return <div className="text-center pt-20 text-slate-500">{t('no_carpets_found')}</div>
     }
-    // Add padding to views that don't have it internally
-    if (currentView === 'home' || currentView === 'favorites') {
-        return e('div', { className: 'p-4 h-full' }, content);
+
+    if (!hasResults && !searchQuery) {
+        if (isFavoritesPage) {
+            return (
+                <div className="text-center pt-20 text-slate-500">
+                    <HeartIcon className="w-16 h-16 mx-auto text-slate-400 mb-4" />
+                    <h2 className="text-xl font-semibold mb-2">{t('no_favorites_found')}</h2>
+                    <p>{t('empty_favorites_message')}</p>
+                </div>
+            );
+        }
+        return (
+            <div className="text-center pt-20 text-slate-500">
+                <HomeIcon className="w-16 h-16 mx-auto text-slate-400 mb-4" />
+                <h2 className="text-xl font-semibold mb-2">{t('no_carpets_found')}</h2>
+                <p>{t('empty_home_message')}</p>
+                <Button className="mt-6" onClick={() => openModal('add')}>
+                    <PlusIcon className="w-5 h-5 inline-block mr-2 -ml-1" />
+                    {t('add_first_carpet')}
+                </Button>
+            </div>
+        );
     }
-    return content;
+
+    return (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {filteredCarpets.map(carpet => (
+                <CarpetCard
+                    key={carpet.id}
+                    carpet={carpet}
+                    onSelect={(c) => openModal('detail', c)}
+                    onToggleFavorite={toggleFavorite}
+                />
+            ))}
+        </div>
+    );
   };
-
-  return e('div', { className: 'h-screen max-h-screen bg-zinc-100 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 flex flex-col max-w-2xl mx-auto' },
-    e(Header, { title: t('app_title'), searchQuery, setSearchQuery, currentView }),
-    e(ToastContainer, null),
-    e('div', { className: 'flex-1 min-h-0 overflow-y-auto' },
-        e('main', { className: 'h-full' }, 
-            e(AnimatePresence, { mode: 'wait' }, 
-                e(motion.div, {
-                    key: currentView,
-                    className: 'h-full',
-                    initial: "initial",
-                    animate: "in",
-                    exit: "out",
-                    variants: pageVariants,
-                    transition: pageTransition,
-                }, renderContent())
-            )
-        )
-    ),
-    e(BottomNav, { currentView, setCurrentView }),
-    e(CarpetDetailModal, { 
-      carpet: selectedCarpet,
-      onClose: handleCloseModal,
-      onUpdate: (c: Carpet) => {
-        updateCarpet(c);
-        setSelectedCarpet(c); // Update the modal with the new data
-      },
-      onDelete: (id: string) => {
-          deleteCarpet(id);
-          handleCloseModal();
-      },
-      onToggleFavorite: toggleFavorite
-    })
+  
+  const SettingsPage = () => (
+      <div className="space-y-8">
+          <div>
+              <h3 className="text-lg font-medium text-slate-800 dark:text-slate-200 mb-2">{t('language')}</h3>
+              <select value={language} onChange={(e) => setLanguage(e.target.value as 'en' | 'tr')} className="w-full p-2 rounded-md bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600">
+                  <option value="en">English</option>
+                  <option value="tr">Türkçe</option>
+              </select>
+          </div>
+          <div>
+              <h3 className="text-lg font-medium text-slate-800 dark:text-slate-200 mb-2">{t('theme')}</h3>
+              <select value={theme} onChange={(e) => setTheme(e.target.value as 'light' | 'dark')} className="w-full p-2 rounded-md bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600">
+                  <option value="light">{t('light')}</option>
+                  <option value="dark">{t('dark')}</option>
+              </select>
+          </div>
+          <div>
+              <h3 className="text-lg font-medium text-slate-800 dark:text-slate-200 mb-2">{t('data_management')}</h3>
+              <div className="flex gap-4">
+                  <Button onClick={handleImportClick} className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 focus:ring-blue-500">
+                      <ArrowUpTrayIcon className="w-5 h-5" /> {t('import_data')}
+                  </Button>
+                  <input type="file" ref={importFileRef} className="hidden" accept=".json" onChange={handleImport} />
+                  <Button onClick={handleExport} className="flex-1 flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 focus:ring-green-500">
+                      <ArrowDownTrayIcon className="w-5 h-5" /> {t('export_data')}
+                  </Button>
+              </div>
+          </div>
+      </div>
   );
+
+    const MatchPage = () => {
+        const [imageFile, setImageFile] = useState<File | null>(null);
+        const [preview, setPreview] = useState<string | null>(null);
+        
+        const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+            const file = e.target.files?.[0];
+            if (file) {
+                setImageFile(file);
+                setPreview(URL.createObjectURL(file));
+            }
+        };
+
+        const handleSubmit = () => {
+            if (imageFile) {
+                handleFindMatch(imageFile);
+            }
+        };
+
+        return (
+            <div className="text-center">
+                <h2 className="text-2xl font-bold mb-2 text-slate-800 dark:text-slate-100">{t('find_matching_carpet')}</h2>
+                <p className="text-slate-600 dark:text-slate-400 mb-6">{t('upload_image_to_find')}</p>
+                <div className="w-full max-w-md mx-auto">
+                    <label className="cursor-pointer block border-2 border-dashed border-slate-400 dark:border-slate-600 rounded-lg p-8 text-center hover:border-indigo-500 dark:hover:border-indigo-400 transition-colors">
+                        {preview ? (
+                            <img src={preview} alt="Preview" className="max-h-48 mx-auto rounded-md" />
+                        ) : (
+                            <div className="text-slate-500">
+                                <CameraIcon className="w-12 h-12 mx-auto mb-2" />
+                                {t('drop_image_here')}
+                            </div>
+                        )}
+                        <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
+                    </label>
+                    <Button onClick={handleSubmit} disabled={!imageFile || isMatching} className="w-full mt-6">
+                        {isMatching ? (
+                            <>
+                                <Spinner className="w-5 h-5 mr-2 animate-spin" />
+                                {t('searching_for_match')}
+                            </>
+                        ) : (
+                            <>
+                                <SearchIcon className="w-5 h-5 mr-2" />
+                                {t('find_match')}
+                            </>
+                        )}
+                    </Button>
+                </div>
+            </div>
+        );
+    };
+
+    const renderPage = () => {
+        switch (activePage) {
+            case 'home':
+            case 'favorites':
+                return renderContent();
+            case 'match':
+                return <MatchPage />;
+            case 'settings':
+                return <SettingsPage />;
+            default:
+                return null;
+        }
+    };
+
+    return (
+        <div className="bg-slate-50 dark:bg-slate-900 min-h-screen text-slate-900 dark:text-slate-200 flex flex-col font-sans">
+            <header className="sticky top-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm z-30 shadow-sm">
+                <div className="container mx-auto px-4 py-3">
+                    <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{t('app_title')}</h1>
+                    {(activePage === 'home' || activePage === 'favorites') && (
+                        <div className="relative mt-3">
+                            <input
+                                type="text"
+                                placeholder={t('search_placeholder')}
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full pl-10 pr-4 py-2 rounded-full bg-slate-100 dark:bg-slate-800 border border-transparent focus:ring-2 focus:ring-indigo-500 focus:border-transparent focus:outline-none"
+                            />
+                            <SearchIcon className="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                        </div>
+                    )}
+                </div>
+            </header>
+            
+            <main className="flex-grow container mx-auto p-4 pb-24">
+                {renderPage()}
+            </main>
+            
+            {(activePage === 'home' || activePage === 'favorites') && (
+                 <button onClick={() => openModal('add')} className="fixed bottom-24 right-6 bg-indigo-600 text-white rounded-full p-4 shadow-lg hover:bg-indigo-700 transition-transform hover:scale-110 z-20">
+                    <PlusIcon className="w-8 h-8" />
+                </button>
+            )}
+
+            <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 z-30">
+                <div className="container mx-auto flex justify-around">
+                    {(['home', 'favorites', 'match', 'settings'] as Page[]).map(page => {
+                        const icons: Record<Page, ReactNode> = {
+                            home: <HomeIcon className="w-7 h-7" />,
+                            favorites: <HeartIcon className="w-7 h-7" />,
+                            match: <SearchIcon className="w-7 h-7" />,
+                            settings: <Cog6ToothIcon className="w-7 h-7" />,
+                        };
+                        const isActive = activePage === page;
+                        return (
+                            <button key={page} onClick={() => setActivePage(page)} className={`flex flex-col items-center py-2 px-4 w-full transition-colors ${isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400'}`}>
+                                {icons[page]}
+                                <span className="text-xs mt-1">{t(page)}</span>
+                            </button>
+                        );
+                    })}
+                </div>
+            </nav>
+
+            {/* Modals */}
+            {modal === 'detail' && selectedCarpet && (
+                <CarpetDetailModal carpet={selectedCarpet} onClose={closeModal} onEdit={() => openModal('edit', selectedCarpet)} onDelete={() => openModal('delete', selectedCarpet)} />
+            )}
+            {(modal === 'add' || modal === 'edit') && (
+                <CarpetFormModal
+                    carpet={modal === 'edit' ? selectedCarpet : null}
+                    onClose={closeModal}
+                    onSave={async (data, file) => {
+                        try {
+                            if (modal === 'add' && file) {
+                                await addCarpet(data, file);
+                                addToast(t('Carpet added successfully'), 'success'); // Assuming key exists
+                            } else if (modal === 'edit' && selectedCarpet) {
+                                await updateCarpet({ ...selectedCarpet, ...data });
+                                addToast(t('Carpet updated successfully'), 'success'); // Assuming key exists
+                            }
+                            closeModal();
+                        } catch (e: any) {
+                            addToast(e.message || 'Failed to save carpet', 'error');
+                        }
+                    }}
+                    getDetailsFromImage={getDetailsFromImage}
+                />
+            )}
+             {modal === 'delete' && selectedCarpet && (
+                <ModalComponent onClose={closeModal} title={t('delete')}>
+                    <p className="mb-6">{t('delete_carpet_confirm')}</p>
+                    <div className="flex justify-end gap-4">
+                        <Button onClick={closeModal} className="bg-slate-200 text-slate-800 hover:bg-slate-300 focus:ring-slate-400">{t('cancel')}</Button>
+                        <Button onClick={handleDelete} className="bg-red-600 hover:bg-red-700 focus:ring-red-500">{t('delete')}</Button>
+                    </div>
+                </ModalComponent>
+            )}
+             {modal === 'match-result' && (
+                <ModalComponent onClose={closeModal} title={matchResult === 'not-found' ? t('no_match_found') : t('match_found')}>
+                    {matchResult === 'not-found' ? (
+                        <p>{t('no_match_found')}</p>
+                    ) : (
+                        matchResult && <>
+                            <p className="mb-4">{t('view_match')}</p>
+                            <CarpetCard carpet={matchResult as Carpet} onSelect={(c) => {closeModal(); openModal('detail', c);}} onToggleFavorite={()=>{}} />
+                        </>
+                    )}
+                </ModalComponent>
+            )}
+
+            {/* Toast Container */}
+            <div className="fixed top-5 right-5 z-50 space-y-2">
+                {toasts.map(toast => (
+                    <div key={toast.id} className={`flex items-center gap-4 p-3 rounded-lg shadow-lg animate-fade-in-down ${toast.type === 'success' ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200' : 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'}`}>
+                       {toast.type === 'success' ? <CheckCircleIcon className="w-6 h-6 text-green-500" /> : <XCircleIcon className="w-6 h-6 text-red-500" />}
+                       <span>{toast.message}</span>
+                        <button onClick={() => removeToast(toast.id)} className="ml-auto opacity-70 hover:opacity-100"><XMarkIcon className="w-5 h-5" /></button>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
 }
+
+// --- Specific Modals and Forms ---
+
+const CarpetDetailModal: React.FC<{ carpet: Carpet; onClose: () => void; onEdit: () => void; onDelete: () => void; }> = ({ carpet, onClose, onEdit, onDelete }) => {
+    const { t } = useSettings();
+    return (
+        <ModalComponent onClose={onClose} title={carpet.name}>
+            <img src={carpet.imageUrl} alt={carpet.name} className="w-full h-64 object-cover rounded-lg mb-4" />
+            <div className="space-y-3 text-sm">
+                {(Object.keys(carpet) as Array<keyof Carpet>).map(key => {
+                    if (['id', 'imageUrl', 'isFavorite', 'createdAt', 'barcodeId', 'qrCodeId'].includes(key)) return null;
+                    const value = carpet[key];
+                    if (!value || (Array.isArray(value) && value.length === 0)) return null;
+                    return (
+                        <div key={key} className="grid grid-cols-3 gap-2">
+                            <strong className="col-span-1 text-slate-500 dark:text-slate-400 capitalize">{t(key.replace(/([A-Z])/g, '_$1').toLowerCase())}</strong>
+                            <p className="col-span-2">{Array.isArray(value) ? value.join(', ') : (key === 'price' ? `$${value.toLocaleString()}` : value)}</p>
+                        </div>
+                    )
+                })}
+            </div>
+            <div className="flex justify-end gap-4 mt-6">
+                <Button onClick={onDelete} className="bg-red-600 hover:bg-red-700 focus:ring-red-500">{t('delete')}</Button>
+                <Button onClick={onEdit}>{t('edit')}</Button>
+            </div>
+        </ModalComponent>
+    );
+};
+
+const CarpetFormModal: React.FC<{
+    carpet: Carpet | null;
+    onClose: () => void;
+    onSave: (data: Partial<Carpet>, file?: File) => void;
+    getDetailsFromImage: (file: File) => Promise<Partial<Carpet>>;
+}> = ({ carpet, onClose, onSave, getDetailsFromImage }) => {
+    const { t } = useSettings();
+    const { addToast } = useToast();
+    const [formData, setFormData] = useState<Partial<Carpet>>(carpet || {});
+    const [imageFile, setImageFile] = useState<File | null>(null);
+    const [imagePreview, setImagePreview] = useState<string | null>(carpet?.imageUrl || null);
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: name === 'price' ? parseFloat(value) || 0 : value }));
+    };
+    
+    const handleMultiValueChange = (name: 'size' | 'yarnType', value: string) => {
+        const values = value.split(',').map(s => s.trim()).filter(Boolean);
+        setFormData(prev => ({...prev, [name]: values}));
+    };
+    
+    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setImageFile(file);
+            setImagePreview(URL.createObjectURL(file));
+        }
+    };
+
+    const handleAIScan = async () => {
+        if (!imageFile) return;
+        setIsAnalyzing(true);
+        try {
+            const details = await getDetailsFromImage(imageFile);
+            setFormData(prev => ({ ...prev, ...details }));
+            addToast(t('AI analysis complete'), 'success'); // Assuming key exists
+        } catch (e: any) {
+             addToast(e.message || t('ai_analysis_error'), 'error');
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
+    
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!formData.name) {
+            addToast(t('required_field'), 'error');
+            return;
+        }
+        onSave(formData, imageFile || undefined);
+    };
+
+    return (
+        <ModalComponent onClose={onClose} title={carpet ? t('edit_carpet_details') : t('add_new_carpet')}>
+            <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                    <label className="cursor-pointer block border-2 border-dashed border-slate-400 dark:border-slate-600 rounded-lg p-4 text-center hover:border-indigo-500 dark:hover:border-indigo-400 transition-colors">
+                        {imagePreview ? (
+                            <img src={imagePreview} alt="Preview" className="max-h-48 mx-auto rounded-md" />
+                        ) : (
+                            <div className="text-slate-500">
+                                <CameraIcon className="w-12 h-12 mx-auto mb-2" />
+                                {t('drop_image_here')}
+                            </div>
+                        )}
+                        <input type="file" className="hidden" accept="image/*" onChange={handleImageChange} required={!carpet} />
+                    </label>
+                    {imageFile && (
+                        <Button onClick={handleAIScan} disabled={isAnalyzing} className="w-full mt-2 bg-teal-600 hover:bg-teal-700 focus:ring-teal-500">
+                            {isAnalyzing ? <><Spinner className="w-5 h-5 mr-2 animate-spin"/> {t('analyzing_image')}</> : <><WandSparkles className="w-5 h-5 mr-2"/> {t('scan_with_ai')}</>}
+                        </Button>
+                    )}
+                </div>
+                
+                {(['name', 'brand', 'model', 'price', 'pattern', 'texture', 'type'] as const).map(field => (
+                     <div key={field}>
+                        <label htmlFor={field} className="block text-sm font-medium mb-1">{t(field)}</label>
+                        <input
+                            type={field === 'price' ? 'number' : 'text'}
+                            id={field}
+                            name={field}
+                            value={(formData as any)[field] || ''}
+                            onChange={handleInputChange}
+                            className="w-full p-2 rounded-md bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600"
+                            required={field === 'name'}
+                        />
+                    </div>
+                ))}
+                
+                {(['size', 'yarnType'] as const).map(field => (
+                     <div key={field}>
+                        <label htmlFor={field} className="block text-sm font-medium mb-1">{t(field === 'size' ? 'sizes' : 'yarn_types')}</label>
+                        <input
+                            type="text"
+                            id={field}
+                            name={field}
+                            value={formData[field]?.join(', ') || ''}
+                            onChange={(e) => handleMultiValueChange(field, e.target.value)}
+                            className="w-full p-2 rounded-md bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600"
+                            placeholder="Value1, Value2, ..."
+                        />
+                    </div>
+                ))}
+
+                <div>
+                    <label htmlFor="description" className="block text-sm font-medium mb-1">{t('description')}</label>
+                    <textarea
+                        id="description"
+                        name="description"
+                        value={formData.description || ''}
+                        onChange={handleInputChange}
+                        rows={4}
+                        className="w-full p-2 rounded-md bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600"
+                    />
+                </div>
+                
+                <div className="flex justify-end gap-4 pt-4">
+                    <Button onClick={onClose} type="button" className="bg-slate-200 text-slate-800 hover:bg-slate-300 focus:ring-slate-400">{t('cancel')}</Button>
+                    <Button type="submit">{t('save_changes')}</Button>
+                </div>
+            </form>
+        </ModalComponent>
+    );
+};
+
 
 export default App;
