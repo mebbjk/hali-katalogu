@@ -12,7 +12,6 @@ import {
   SearchIcon,
   Cog6ToothIcon,
   PlusIcon,
-  TrashIcon,
   XMarkIcon,
   WandSparkles,
   CameraIcon,
@@ -66,7 +65,6 @@ const Button: React.FC<{ onClick?: () => void; children: ReactNode; className?: 
 
 
 const CarpetCard: React.FC<{ carpet: Carpet; onSelect: (carpet: Carpet) => void; onToggleFavorite: (id: string) => void; }> = ({ carpet, onSelect, onToggleFavorite }) => {
-    const { t } = useSettings();
     return (
         <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md overflow-hidden transition-transform hover:scale-105 cursor-pointer" onClick={() => onSelect(carpet)}>
             <img src={carpet.imageUrl} alt={carpet.name} className="w-full h-48 object-cover" />
