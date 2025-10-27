@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, ChangeEvent, useRef, ReactNode } from 'react';
+import React, { useState, useEffect, ChangeEvent, useRef, ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCarpets } from '../hooks/useCarpets';
 import { useSettings } from '../contexts/SettingsContext';
@@ -300,7 +300,7 @@ const CarpetFormModal: React.FC<{ carpet: Carpet | null; onClose: () => void }> 
         }
         setIsAnalyzing(true);
         try {
-            let details;
+            let details: Partial<Carpet>;
             if (imageFile) {
                 details = await getDetailsFromImage(imageFile);
             } else if (previewUrl) {
@@ -393,7 +393,7 @@ const CarpetFormModal: React.FC<{ carpet: Carpet | null; onClose: () => void }> 
                     <FormField label={t('fixed_sizes')}>
                         <div className="flex flex-wrap gap-2">
                             {fixedSizes.map(size => (
-                                <TagButton key={size} active={formData.size?.includes(size)} onClick={() => toggleArrayValue('size', size)}>{size}</TagButton>
+                                <TagButton key={size} active={!!formData.size?.includes(size)} onClick={() => toggleArrayValue('size', size)}>{size}</TagButton>
                             ))}
                         </div>
                     </FormField>
@@ -402,7 +402,7 @@ const CarpetFormModal: React.FC<{ carpet: Carpet | null; onClose: () => void }> 
                     <FormField label={t('yarn_type')}>
                         <div className="flex flex-wrap gap-2">
                             {fixedYarnTypes.map(type => (
-                                <TagButton key={type} active={formData.yarnType?.includes(type)} onClick={() => toggleArrayValue('yarnType', type)}>{type}</TagButton>
+                                <TagButton key={type} active={!!formData.yarnType?.includes(type)} onClick={() => toggleArrayValue('yarnType', type)}>{type}</TagButton>
                             ))}
                         </div>
                     </FormField>

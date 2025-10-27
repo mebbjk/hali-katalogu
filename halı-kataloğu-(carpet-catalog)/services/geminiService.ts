@@ -56,7 +56,7 @@ export const getDetailsFromImage = async (file: File): Promise<Partial<Carpet>> 
       }
     });
 
-    const text = response.text.trim();
+    const text = response.text?.trim() || '{}';
     return JSON.parse(text) as Partial<Carpet>;
   } catch (error) {
     console.error("Error getting details from image:", error);
@@ -107,7 +107,7 @@ export const findMatchByImage = async (file: File, carpets: Carpet[]): Promise<C
             }
         });
         
-        const text = response.text.trim();
+        const text = response.text?.trim() || '{}';
         const matchedCarpetInfo = JSON.parse(text) as { id?: string };
 
         if (matchedCarpetInfo && matchedCarpetInfo.id) {
@@ -136,7 +136,7 @@ export const readCodeFromImage = async (file: File): Promise<string | null> => {
       },
     });
 
-    const text = response.text.trim();
+    const text = response.text?.trim();
     return text || null; // Return null if the string is empty
   } catch (error) {
     console.error("Error reading code from image:", error);
