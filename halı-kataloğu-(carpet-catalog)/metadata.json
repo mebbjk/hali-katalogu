@@ -1,0 +1,7 @@
+{
+  "name": "Halı Kataloğu (Carpet Catalog)",
+  "description": "An AI-powered mobile application to catalog carpets. Take a photo of a carpet to automatically extract its features and save it to your inventory. You can also search for a saved carpet by taking a new photo.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

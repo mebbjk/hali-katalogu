@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="carpet-icon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>Halı Kataloğu</title>
+    <meta name="theme-color" content="#18181b" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <script>
+      (function () {
+        const theme = localStorage.getItem('carpet_catalog_theme') || 'light';
+        window.applyTheme = function (newTheme) {
+          document.documentElement.classList.remove('dark', 'light');
+          document.documentElement.classList.add(newTheme);
+        };
+        window.applyTheme(theme);
+      })();
+    </script>
+    <script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^18.3.1",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^18.3.1/",
+    "react/": "https://aistudiocdn.com/react@^18.3.1/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.27.0",
+    "uuid": "https://aistudiocdn.com/uuid@^10.0.0",
+    "framer-motion": "https://aistudiocdn.com/framer-motion@^12.23.24",
+    "vite": "https://aistudiocdn.com/vite@^7.1.12",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.0",
+    "vite-plugin-pwa": "https://aistudiocdn.com/vite-plugin-pwa@^1.1.0",
+    "tailwindcss/": "https://aistudiocdn.com/tailwindcss@^4.1.16/"
+  }
+}
+</script>
+  <link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="index.tsx"></script>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>
