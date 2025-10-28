@@ -5,9 +5,9 @@ import {
   updateCarpetDB,
   deleteCarpetDB,
   replaceAllCarpetsDB
-} from './services/dbService';
-import { getDetailsFromImage as getDetailsFromImageAPI, findMatchByImage as findMatchByImageAPI } from './services/geminiService';
-import type { Carpet } from './types';
+} from '../services/dbService';
+import { getDetailsFromImage as getDetailsFromImageAPI, findMatchByImage as findMatchByImageAPI } from '../services/geminiService';
+import type { Carpet } from '../types';
 
 const fileToDataURL = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
