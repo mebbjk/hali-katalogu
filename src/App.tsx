@@ -1,3 +1,4 @@
+// FIX: Removed extraneous text from the end of the file that was causing parsing errors.
 import React, { useState, useEffect, ChangeEvent, useRef, ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDropzone } from 'react-dropzone';
@@ -7,7 +8,7 @@ import { useToast } from './contexts/ToastContext';
 import type { Carpet } from './types';
 import {
     HomeIcon, HeartIcon, SearchIcon, SettingsIcon, PlusCircleIcon, StarIcon, TrashIcon, EditIcon, XIcon,
-    SunIcon, MoonIcon, SparklesIcon, CameraIcon, PhotoIcon, CheckIcon, BarcodeScannerIcon
+    SunIcon, MoonIcon, SparklesIcon, CameraIcon, PhotoIcon, BarcodeScannerIcon
 } from './components/icons';
 import { readCodeFromImage } from './services/geminiService';
 
