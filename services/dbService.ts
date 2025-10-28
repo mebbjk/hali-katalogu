@@ -1,4 +1,4 @@
-import type { Carpet } from './types';
+import type { Carpet } from '../types';
 
 const DB_NAME = 'CarpetCatalogDB';
 const DB_VERSION = 1;
