@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import type { SettingsContextType, Theme, Language } from './types';
-import { translations } from './translations';
+import type { SettingsContextType, Theme, Language } from '../types';
+import { translations } from '../translations';
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
