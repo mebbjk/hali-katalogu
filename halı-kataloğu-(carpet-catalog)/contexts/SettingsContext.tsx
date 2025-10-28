@@ -1,17 +1,15 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import type { SettingsContextType, Theme, Language } from '../types';
-import { translations } from '../src/translations';
+import { translations } from '../translations';
 
-// FIX: Implement the SettingsContext to provide global state for theme and language.
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
 export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [language, setLanguageState] = useState<Language>(() => {
-    return (localStorage.getItem('language') as Language) || 'en';
+    return (localStorage.getItem('language') as Language) || 'tr';
   });
   const [theme, setThemeState] = useState<Theme>(() => {
     const savedTheme = localStorage.getItem('theme') as Theme;
-    // Prefers user's system setting if no theme is saved
     return savedTheme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
   });
 
