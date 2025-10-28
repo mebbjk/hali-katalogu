@@ -1,6 +1,6 @@
 // FIX: Implement the geminiService to interact with the Google Gemini API for carpet image analysis.
 import { GoogleGenAI, Type } from '@google/genai';
-import type { Carpet } from './types';
+import type { Carpet } from '../types';
 
 // FIX: Initialize the GoogleGenAI client with the API key from environment variables.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
