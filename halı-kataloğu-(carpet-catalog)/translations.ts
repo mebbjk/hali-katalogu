@@ -1,5 +1,5 @@
 // FIX: Import the Language type from the central types file.
-import type { Language } from '../types';
+import type { Language } from './types';
 
 export const translations: Record<Language, Record<string, string>> = {
   en: {
